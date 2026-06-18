@@ -7,8 +7,9 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from agent import parse_task_with_ai
-from sheets import add_task, get_all_tasks, update_task_status, get_overdue_tasks
+from agent import parse_task_with_ai, analyze_project_tasks
+from sheets import (add_task, get_all_tasks, update_task_status, get_overdue_tasks,
+                    get_all_projects, add_project, get_overdue_from_project)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -19,28 +20,31 @@ class TaskCreation(StatesGroup):
     confirming = State()
 
 
-# ─────────────────── /start ───────────────────
+class ProjectAdding(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_url = State()
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(
         "👋 Привет! Я агент управления задачами.\n\n"
-        "Команды:\n"
-        "➕ /newtask — создать задачу (AI поможет оформить)\n"
-        "📋 /tasks — список всех задач\n"
-        "✅ /done <ID> — отметить задачу выполненной\n"
-        "⚠️ /overdue — показать просроченные задачи\n"
+        "➕ /newtask — создать задачу\n"
+        "📋 /tasks — список задач\n"
+        "✅ /done <ID> — отметить выполненной\n"
+        "⚠️ /overdue — просроченные (все проекты)\n"
+        "🗂 /projects — список проектов\n"
+        "🔗 /addproject — подключить таблицу проекта\n"
         "❓ /help — справка"
     )
 
 
-# ─────────────────── /newtask ───────────────────
 @router.message(Command("newtask"))
 async def cmd_newtask(message: Message, state: FSMContext):
     await state.set_state(TaskCreation.waiting_for_text)
     await message.answer(
-        "📝 Опишите задачу в свободной форме.\n\n"
-        "Пример: _Подготовить презентацию для клиента Иванов к пятнице, ответственный — Алексей_\n\n"
-        "AI сам разберёт название, дедлайн и ответственного.",
+        "📝 Опишите задачу. Можно кратко — остальное дозаполните в таблице.\n\n"
+        "Пример: _Подготовить презентацию, отдел маркетинга, ответственный Алексей, до пятницы_",
         parse_mode="Markdown"
     )
 
@@ -50,119 +54,179 @@ async def process_task_text(message: Message, state: FSMContext):
     await message.answer("🤖 Анализирую задачу...")
     today = datetime.now().strftime("%Y-%m-%d")
     parsed = await parse_task_with_ai(message.text, today)
-
     if not parsed:
-        await message.answer("❌ Не удалось разобрать задачу. Попробуйте ещё раз или /newtask заново.")
+        await message.answer("❌ Не удалось разобрать задачу. Попробуйте /newtask заново.")
         await state.clear()
         return
-
     await state.update_data(parsed=parsed)
     await state.set_state(TaskCreation.confirming)
 
-    deadline = parsed.get("deadline", "Не указан")
+    assignee = parsed.get("assignee") or "—"
+    department = parsed.get("department") or "—"
+    project = parsed.get("project") or "—"
+    deadline = parsed.get("deadline") or "—"
+
     text = (
         f"✅ *Задача распознана:*\n\n"
-        f"📌 *Название:* {parsed.get('title')}\n"
-        f"📝 *Описание:* {parsed.get('description')}\n"
-        f"👤 *Ответственный:* {parsed.get('assignee')}\n"
-        f"📅 *Дедлайн:* {deadline}\n\n"
-        f"Сохранить задачу?"
+        f"📌 *Задача:* {parsed.get('title')}\n"
+        f"👤 *Ответственный:* {assignee}\n"
+        f"🏢 *Отдел:* {department}\n"
+        f"📁 *Проект:* {project}\n"
+        f"📅 *Срок:* {deadline}\n"
+        f"💬 *Комментарий:* {parsed.get('description') or '—'}\n\n"
+        f"_Пустые поля можно дозаполнить в таблице._\n\nСохранить?"
     )
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Сохранить", callback_data="confirm_task"),
-            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
-        ]
-    ])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="✅ Сохранить", callback_data="confirm_task"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
+    ]])
     await message.answer(text, reply_markup=kb, parse_mode="Markdown")
 
 
 @router.callback_query(F.data == "confirm_task", TaskCreation.confirming)
 async def confirm_task(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    parsed = data["parsed"]
+    p = data["parsed"]
     task_id = add_task(
-        title=parsed.get("title", "Без названия"),
-        description=parsed.get("description", ""),
-        assignee=parsed.get("assignee", "Не указан"),
-        deadline=parsed.get("deadline", "Не указан"),
+        assignee=p.get("assignee") or "",
+        department=p.get("department") or "",
+        project=p.get("project") or "",
+        title=p.get("title") or "Без названия",
+        deadline=p.get("deadline") or "",
+        comment=p.get("description") or "",
     )
     await state.clear()
-    await callback.message.edit_text(
-        f"✅ Задача #{task_id} сохранена в Google Sheets!", parse_mode="Markdown"
-    )
+    await callback.message.edit_text(f"✅ Задача #{task_id} сохранена в таблице!\n\nДозаполните пустые поля прямо в Google Sheets.")
     await callback.answer()
 
 
 @router.callback_query(F.data == "cancel_task")
 async def cancel_task(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text("❌ Создание задачи отменено.")
+    await callback.message.edit_text("❌ Отменено.")
     await callback.answer()
 
 
-# ─────────────────── /tasks ───────────────────
 @router.message(Command("tasks"))
 async def cmd_tasks(message: Message):
     tasks = get_all_tasks()
     if not tasks:
-        await message.answer("📋 Задач пока нет. Создайте первую: /newtask")
+        await message.answer("📋 Задач нет. Создайте: /newtask")
         return
-
-    lines = ["📋 *Все задачи:*\n"]
-    for t in tasks[-20:]:  # последние 20
-        status_emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢"}.get(t.get("Статус", ""), "⚪")
-        lines.append(
-            f"{status_emoji} [{t['ID']}] *{t['Название']}*\n"
-            f"   👤 {t['Ответственный']} | 📅 {t['Дедлайн']} | {t['Статус']}"
-        )
-
+    lines = ["📋 *Задачи:*\n"]
+    for t in tasks[-20:]:
+        emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢"}.get(t.get("Статус", ""), "⚪")
+        assignee = t.get("Ответственное лицо") or "—"
+        deadline = t.get("Срок исполнения") or "—"
+        lines.append(f"{emoji} [{t['ID']}] *{t['Задача']}*\n   👤 {assignee} | 📅 {deadline}")
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
-# ─────────────────── /done ───────────────────
 @router.message(Command("done"))
 async def cmd_done(message: Message):
     parts = message.text.split()
     if len(parts) < 2 or not parts[1].isdigit():
-        await message.answer("Укажите ID задачи: /done 5")
+        await message.answer("Укажите ID: /done 5")
         return
-
-    task_id = int(parts[1])
-    success = update_task_status(task_id, "Выполнена")
-    if success:
-        await message.answer(f"✅ Задача #{task_id} отмечена как выполненная!")
-    else:
-        await message.answer(f"❌ Задача #{task_id} не найдена.")
+    success = update_task_status(int(parts[1]), "Выполнена")
+    await message.answer(f"✅ Задача #{parts[1]} выполнена!" if success else f"❌ Задача #{parts[1]} не найдена.")
 
 
-# ─────────────────── /overdue ───────────────────
 @router.message(Command("overdue"))
 async def cmd_overdue(message: Message):
-    tasks = get_overdue_tasks()
-    if not tasks:
-        await message.answer("🎉 Просроченных задач нет!")
-        return
+    await message.answer("🔍 Проверяю все проекты...")
+    all_overdue = get_overdue_tasks()
+    result = []
 
-    lines = [f"⚠️ *Просроченные задачи ({len(tasks)}):*\n"]
-    for t in tasks:
-        lines.append(
-            f"🔴 [{t['ID']}] *{t['Название']}*\n"
-            f"   👤 {t['Ответственный']} | 📅 {t['Дедлайн']}"
-        )
+    if all_overdue:
+        lines = ["⚠️ *Основная таблица:*"]
+        for t in all_overdue:
+            assignee = t.get("Ответственное лицо") or "—"
+            lines.append(f"🔴 [{t['ID']}] *{t['Задача']}*\n   👤 {assignee} | 📅 {t['Срок исполнения']}")
+        result.append("\n".join(lines))
+
+    projects = get_all_projects()
+    for project in projects:
+        data = get_overdue_from_project(project["SPREADSHEET_ID"], project["Название"])
+        if data:
+            analysis = await analyze_project_tasks(project["Название"], data["rows"])
+            result.append(f"📁 *{project['Название']}:*\n{analysis}")
+
+    if not result:
+        await message.answer("🎉 Просроченных задач нет!")
+    else:
+        await message.answer("\n\n".join(result), parse_mode="Markdown")
+
+
+@router.message(Command("projects"))
+async def cmd_projects(message: Message):
+    projects = get_all_projects()
+    if not projects:
+        await message.answer("🗂 Проектов нет. Добавьте: /addproject")
+        return
+    lines = ["🗂 *Проекты:*\n"]
+    for p in projects:
+        lines.append(f"📁 [{p['ID']}] *{p['Название']}*")
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
-# ─────────────────── /help ───────────────────
+@router.message(Command("addproject"))
+async def cmd_addproject(message: Message, state: FSMContext):
+    await state.set_state(ProjectAdding.waiting_for_name)
+    await message.answer("📁 Введите название проекта:")
+
+
+@router.message(ProjectAdding.waiting_for_name)
+async def process_project_name(message: Message, state: FSMContext):
+    await state.update_data(name=message.text)
+    await state.set_state(ProjectAdding.waiting_for_url)
+    await message.answer("🔗 Вставьте ссылку на Google таблицу:")
+
+
+@router.message(ProjectAdding.waiting_for_url)
+async def process_project_url(message: Message, state: FSMContext):
+    url = message.text.strip()
+    try:
+        spreadsheet_id = url.split("/d/")[1].split("/")[0]
+    except IndexError:
+        await message.answer("❌ Неверная ссылка. Нужна ссылка вида https://docs.google.com/spreadsheets/d/ID/edit")
+        return
+
+    data = await state.get_data()
+    name = data["name"]
+    await message.answer("🔍 Проверяю доступ...")
+    result = get_overdue_from_project(spreadsheet_id, name)
+
+    if result is None:
+        await state.clear()
+        await message.answer(
+            "❌ Нет доступа!\n\n"
+            "Откройте таблицу → Настройки доступа → добавьте редактором:\n"
+            "`task-bot@task-bot-499810.iam.gserviceaccount.com`\n\n"
+            "Затем повторите /addproject",
+            parse_mode="Markdown"
+        )
+        return
+
+    project_id = add_project(name, spreadsheet_id)
+    await state.clear()
+    await message.answer(
+        f"✅ Проект *{name}* подключён!\n\n"
+        f"/overdue теперь проверяет и эту таблицу.",
+        parse_mode="Markdown"
+    )
+
+
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     await message.answer(
         "📖 *Справка:*\n\n"
-        "/newtask — описать задачу текстом, AI оформит её\n"
-        "/tasks — список задач (последние 20)\n"
-        "/done <ID> — отметить задачу выполненной\n"
-        "/overdue — просроченные задачи\n\n"
-        "Уведомления о просрочке приходят автоматически каждый день в 09:00 МСК.",
+        "/newtask — создать задачу (AI оформит, пустое дозаполните в таблице)\n"
+        "/tasks — список задач\n"
+        "/done <ID> — отметить выполненной\n"
+        "/overdue — просроченные во всех проектах\n"
+        "/projects — список проектов\n"
+        "/addproject — подключить Google таблицу\n\n"
+        "Уведомления о просрочке — каждый день в 09:00 МСК.",
         parse_mode="Markdown"
     )
