@@ -97,3 +97,14 @@ async def generate_overdue_summary(tasks):
     for t in tasks:
         lines.append(f"🔴 [{t['ID']}] *{t.get('Задача','')}*\n   👤 {t.get('Ответственное лицо','—')} | 📅 {t.get('Срок исполнения','—')}")
     return "\n".join(lines)
+
+
+async def parse_deadline(text: str) -> str:
+    """Конвертирует текстовый срок в YYYY-MM-DD."""
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+    raw = await _call_claude(
+        messages=[{"role": "user", "content": f"Сегодня {today}. Переведи срок '{text}' в формат YYYY-MM-DD. Верни ТОЛЬКО дату, без пояснений."}],
+        max_tokens=20,
+    )
+    return raw.strip() if raw else text
