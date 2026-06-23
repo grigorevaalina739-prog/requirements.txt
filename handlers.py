@@ -216,7 +216,7 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    parsed = data["parsed"]
+    parsed = data.get("parsed", {})
     parsed["project"] = project
     await state.update_data(parsed=parsed)
     await state.set_state(TaskCreation.confirming)
@@ -357,14 +357,19 @@ async def cmd_tasks(message: Message):
         await message.answer("📋 Задач нет. /newtask")
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"show_{p['name']}")] for p in projects
+        [InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"show_{i}")] for i, p in enumerate(projects)
     ])
     await message.answer("📋 Выберите проект:", reply_markup=kb)
 
 
 @router.callback_query(F.data.startswith("show_"))
 async def show_project_tasks(callback: CallbackQuery):
-    project = callback.data.replace("show_", "")
+    idx = callback.data.replace("show_", "")
+    projects = get_projects()
+    try:
+        project = projects[int(idx)]["name"]
+    except (ValueError, IndexError):
+        project = idx
     tasks = get_tasks(project=project)
     if not tasks:
         await callback.message.answer(f"📋 В *{project}* задач нет.", parse_mode="Markdown")
