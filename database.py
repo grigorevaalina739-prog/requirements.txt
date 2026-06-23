@@ -1,13 +1,9 @@
-"""
-SQLite база данных вместо Google Sheets.
-"""
 import sqlite3
 import logging
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
 DB_PATH = Path("/data/tasks.db")
 
 
@@ -36,13 +32,13 @@ def init_db():
             created_at TEXT DEFAULT (date('now')),
             deadline TEXT DEFAULT '',
             status TEXT DEFAULT 'Открыта',
-            comment TEXT DEFAULT ''
+            comment TEXT DEFAULT '',
+            source_sheet TEXT DEFAULT '',
+            source_id TEXT DEFAULT ''
         );
         """)
     logger.info("База данных инициализирована.")
 
-
-# ─── Проекты ───────────────────────────────────────────────────────────────
 
 def get_projects():
     with get_conn() as conn:
@@ -59,15 +55,12 @@ def add_project(name):
         return False
 
 
-# ─── Задачи ────────────────────────────────────────────────────────────────
-
-def add_task(project, assignee, department, title, deadline, comment=""):
+def add_task(project, assignee, department, title, deadline, comment="", status="Открыта"):
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO tasks (project, assignee, department, title, deadline, comment) VALUES (?,?,?,?,?,?)",
-            (project, assignee, department, title, deadline, comment)
+            "INSERT INTO tasks (project, assignee, department, title, deadline, comment, status) VALUES (?,?,?,?,?,?,?)",
+            (project, assignee, department, title, deadline, comment, status)
         )
-        # Убедимся что проект существует
         conn.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (project,))
         return cur.lastrowid
 
