@@ -1,0 +1,139 @@
+"""
+Веб-дашборд на aiohttp — показывает задачи по проектам.
+"""
+from aiohttp import web
+from database import get_tasks, get_projects, get_stats, update_status
+import json
+from datetime import datetime
+
+routes = web.RouteTableDef()
+
+
+def task_row(t):
+    today = datetime.now().strftime("%Y-%m-%d")
+    overdue = t["deadline"] and t["deadline"] < today and t["status"] != "Выполнена"
+    status_color = {
+        "Открыта": "#3B82F6",
+        "В работе": "#F59E0B",
+        "Выполнена": "#10B981",
+    }.get(t["status"], "#6B7280")
+    row_bg = "#FEE2E2" if overdue else "white"
+    return f"""
+    <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
+        <td style="padding:10px 12px; color:#6B7280; font-size:13px;">#{t['id']}</td>
+        <td style="padding:10px 12px; font-weight:500;">{t['title']}</td>
+        <td style="padding:10px 12px; color:#4B5563;">{t['assignee'] or '—'}</td>
+        <td style="padding:10px 12px; color:#4B5563;">{t['department'] or '—'}</td>
+        <td style="padding:10px 12px; color:#4B5563;">{t['project']}</td>
+        <td style="padding:10px 12px; color:#4B5563;">{t['deadline'] or '—'}</td>
+        <td style="padding:10px 12px;">
+            <span style="background:{status_color}20; color:{status_color}; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600;">
+                {t['status']}
+            </span>
+        </td>
+        <td style="padding:10px 12px; color:#4B5563; font-size:13px;">{t['comment'] or '—'}</td>
+        <td style="padding:10px 12px;">
+            {"" if t['status']=='Выполнена' else f'<a href="/done/{t["id"]}" style="background:#10B981;color:white;padding:4px 12px;border-radius:6px;font-size:12px;text-decoration:none;">✓ Выполнено</a>'}
+        </td>
+    </tr>"""
+
+
+@routes.get("/")
+async def dashboard(request):
+    stats = get_stats()
+    projects = get_projects()
+    selected = request.rel_url.query.get("project", "")
+    status_filter = request.rel_url.query.get("status", "")
+
+    tasks = get_tasks(project=selected or None, status=status_filter or None)
+
+    project_options = "".join(
+        f'<option value="{p["name"]}" {"selected" if p["name"]==selected else ""}>{p["name"]}</option>'
+        for p in projects
+    )
+    status_options = "".join(
+        f'<option value="{s}" {"selected" if s==status_filter else ""}>{s}</option>'
+        for s in ["Открыта", "В работе", "Выполнена"]
+    )
+    rows = "".join(task_row(t) for t in tasks)
+
+    if not tasks:
+        rows = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Dashboard</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
+  .header {{ background: #1E293B; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 12px; }}
+  .header h1 {{ font-size: 20px; font-weight: 700; }}
+  .header span {{ opacity: 0.5; font-size: 13px; }}
+  .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 24px 32px; }}
+  .stat {{ background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
+  .stat .num {{ font-size: 32px; font-weight: 700; }}
+  .stat .label {{ font-size: 13px; color: #6B7280; margin-top: 4px; }}
+  .filters {{ padding: 0 32px 16px; display: flex; gap: 12px; align-items: center; }}
+  select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white; }}
+  .btn {{ padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none; }}
+  .btn-clear {{ background: #6B7280; }}
+  .table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
+  table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; }}
+  thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; }}
+  .overdue-badge {{ background: #FEE2E2; color: #DC2626; padding: 2px 8px; border-radius: 4px; font-size: 11px; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>📋 Task Dashboard</h1>
+    <span>Управление задачами</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="num" style="color:#1E293B">{stats['total']}</div><div class="label">Всего задач</div></div>
+  <div class="stat"><div class="num" style="color:#3B82F6">{stats['open']}</div><div class="label">Открытых</div></div>
+  <div class="stat"><div class="num" style="color:#10B981">{stats['done']}</div><div class="label">Выполненных</div></div>
+  <div class="stat"><div class="num" style="color:#EF4444">{stats['overdue']}</div><div class="label">Просроченных 🔴</div></div>
+</div>
+
+<div class="filters">
+  <form method="get" style="display:flex;gap:12px;align-items:center;">
+    <select name="project"><option value="">Все проекты</option>{project_options}</select>
+    <select name="status"><option value="">Все статусы</option>{status_options}</select>
+    <button type="submit" class="btn">Фильтр</button>
+    <a href="/" class="btn btn-clear">Сбросить</a>
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Задача</th><th>Ответственный</th><th>Отдел</th>
+        <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий</th><th></th>
+      </tr>
+    </thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+@routes.get("/done/{task_id}")
+async def mark_done(request):
+    task_id = int(request.match_info["task_id"])
+    update_status(task_id, "Выполнена")
+    raise web.HTTPFound("/")
+
+
+def create_app():
+    app = web.Application()
+    app.add_routes(routes)
+    return app
