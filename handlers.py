@@ -102,7 +102,8 @@ async def cmd_start(message: Message):
         "⚠️ /overdue — просроченные\n"
         "📁 /projects — список проектов\n"
         "🆕 /newproject — создать проект\n"
-        "📥 /import — импорт из Google Sheets"
+        "📥 /import — импорт из Google Sheets\n"
+        "🗑 /cleartasks — очистить все задачи и проекты"
     )
 
 
@@ -375,6 +376,16 @@ async def process_project_name(message: Message, state: FSMContext):
     add_project(name)
     await state.clear()
     await message.answer(f"✅ Проект *{name}* создан!", parse_mode="Markdown")
+
+
+# ─── /cleartasks ───────────────────────────────────────────────────────────
+@router.message(Command("cleartasks"))
+async def cmd_cleartasks(message: Message):
+    from database import get_conn
+    with get_conn() as conn:
+        conn.execute("DELETE FROM tasks")
+        conn.execute("DELETE FROM projects")
+    await message.answer("🗑 Все задачи и проекты удалены!")
 
 
 # ─── /import ───────────────────────────────────────────────────────────────
