@@ -23,6 +23,7 @@ class TaskCreation(StatesGroup):
     confirming_multiple = State()
     waiting_for_deadline_multiple = State()
     waiting_for_assignee_multiple = State()
+    correcting_field_multiple = State()
 
 
 class ProjectAdding(StatesGroup):
@@ -74,21 +75,45 @@ def format_task_text(parsed):
     )
 
 
-def format_multiple_tasks(tasks, project, deadline="—", assignee="—"):
+def format_multiple_preview(tasks, project, deadline, assignee):
     lines = [f"📋 *Найдено {len(tasks)} задач:*\n"]
     for i, t in enumerate(tasks, 1):
-        lines.append(f"*{i}.* {t.get('title','—')}\n")
-    lines.append(f"📁 *Проект:* {project}")
-    lines.append(f"📅 *Срок:* {deadline}")
-    lines.append(f"👤 *Ответственный:* {assignee}")
-    lines.append("\nСохранить все задачи?")
+        lines.append(f"*{i}.* {t.get('title','—')}")
+    lines.append(f"\n📁 *Проект:* {project}")
+    lines.append(f"📅 *Срок:* {deadline or '—'}")
+    lines.append(f"👤 *Ответственный:* {assignee or '—'}")
+    lines.append("\n_Всё верно или хотите изменить?_")
     return "\n".join(lines)
+
+
+def multiple_confirm_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple")],
+        [InlineKeyboardButton(text="📁 Изменить проект", callback_data="correct_project")],
+        [InlineKeyboardButton(text="📅 Изменить срок", callback_data="correct_deadline")],
+        [InlineKeyboardButton(text="👤 Изменить ответственного", callback_data="correct_assignee")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")],
+    ])
 
 
 def projects_keyboard(projects):
     buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"proj_{p['name']}")] for p in projects]
     buttons.append([InlineKeyboardButton(text="➕ Новый проект", callback_data="proj_new")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+async def show_multiple_preview(message_or_callback, state, edit=False):
+    data = await state.get_data()
+    tasks = data["multiple_tasks"]
+    project = data.get("selected_project", "Общие")
+    deadline = data.get("selected_deadline", "")
+    assignee = data.get("selected_assignee", "")
+    text = format_multiple_preview(tasks, project, deadline, assignee)
+    await state.set_state(TaskCreation.confirming_multiple)
+    if edit:
+        await message_or_callback.message.edit_text(text, reply_markup=multiple_confirm_keyboard(), parse_mode="Markdown")
+    else:
+        await message_or_callback.answer(text, reply_markup=multiple_confirm_keyboard(), parse_mode="Markdown")
 
 
 # ─── /start ────────────────────────────────────────────────────────────────
@@ -112,10 +137,7 @@ async def cmd_start(message: Message):
 async def cmd_dashboard(message: Message):
     from config import RAILWAY_PUBLIC_DOMAIN
     url = f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else "http://localhost:8080"
-    await message.answer(
-        f"📊 [Открыть дашборд]({url})",
-        parse_mode="Markdown"
-    )
+    await message.answer(f"📊 [Открыть дашборд]({url})", parse_mode="Markdown")
 
 
 # ─── /newtask ──────────────────────────────────────────────────────────────
@@ -141,9 +163,16 @@ async def process_task_text(message: Message, state: FSMContext):
 
     if result.get("is_multiple") and result.get("tasks"):
         tasks = result["tasks"]
-        projects = get_projects()
-        await state.update_data(multiple_tasks=tasks, selected_deadline="", selected_assignee="")
+        # Берём общие данные из первой задачи если AI распознал
+        first = tasks[0] if tasks else {}
+        await state.update_data(
+            multiple_tasks=tasks,
+            selected_project="",
+            selected_deadline=first.get("deadline", ""),
+            selected_assignee=first.get("assignee", "")
+        )
 
+        projects = get_projects()
         if projects:
             await state.set_state(TaskCreation.choosing_project)
             await message.answer(
@@ -153,12 +182,7 @@ async def process_task_text(message: Message, state: FSMContext):
             )
         else:
             await state.update_data(selected_project="Общие")
-            await state.set_state(TaskCreation.waiting_for_deadline_multiple)
-            await message.answer(
-                f"📋 Найдено *{len(tasks)} задач* → Проект: *Общие*\n\n"
-                f"📅 Введите срок для всех задач (например: 30.06.2026)\nИли нажмите /skip чтобы пропустить:",
-                parse_mode="Markdown"
-            )
+            await show_multiple_preview(message, state)
         return
 
     parsed = result
@@ -186,12 +210,7 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
 
     if data.get("multiple_tasks"):
         await state.update_data(selected_project=project)
-        await state.set_state(TaskCreation.waiting_for_deadline_multiple)
-        await callback.message.answer(
-            f"✅ Проект: *{project}*\n\n"
-            f"📅 Введите срок для всех задач (например: 30.06.2026)\nИли /skip чтобы пропустить:",
-            parse_mode="Markdown"
-        )
+        await show_multiple_preview(callback, state, edit=False)
         await callback.answer()
         return
 
@@ -203,42 +222,42 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ─── Срок для нескольких задач ─────────────────────────────────────────────
-@router.message(TaskCreation.waiting_for_deadline_multiple)
-async def set_deadline_multiple(message: Message, state: FSMContext):
-    value = message.text.strip()
-    if value != "/skip":
-        deadline = await parse_deadline(value) or value
-    else:
-        deadline = ""
-    await state.update_data(selected_deadline=deadline)
-    await state.set_state(TaskCreation.waiting_for_assignee_multiple)
-    await message.answer(
-        f"📅 Срок: *{deadline or '—'}*\n\n"
-        f"👤 Введите ответственного для всех задач\nИли /skip чтобы пропустить:",
-        parse_mode="Markdown"
-    )
+# ─── Кнопки изменения в превью нескольких задач ───────────────────────────
+@router.callback_query(F.data == "correct_project", TaskCreation.confirming_multiple)
+async def correct_project(callback: CallbackQuery, state: FSMContext):
+    projects = get_projects()
+    await state.set_state(TaskCreation.choosing_project)
+    await callback.message.answer("📁 Выберите проект:", reply_markup=projects_keyboard(projects))
+    await callback.answer()
 
 
-# ─── Ответственный для нескольких задач ───────────────────────────────────
-@router.message(TaskCreation.waiting_for_assignee_multiple)
-async def set_assignee_multiple(message: Message, state: FSMContext):
-    value = message.text.strip()
-    assignee = "" if value == "/skip" else value
-    await state.update_data(selected_assignee=assignee)
+@router.callback_query(F.data == "correct_deadline", TaskCreation.confirming_multiple)
+async def correct_deadline(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(correcting="deadline")
+    await state.set_state(TaskCreation.correcting_field_multiple)
+    await callback.message.answer("📅 Введите новый срок (например: 30.06.2026):")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "correct_assignee", TaskCreation.confirming_multiple)
+async def correct_assignee(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(correcting="assignee")
+    await state.set_state(TaskCreation.correcting_field_multiple)
+    await callback.message.answer("👤 Введите ответственного:")
+    await callback.answer()
+
+
+@router.message(TaskCreation.correcting_field_multiple)
+async def apply_correction(message: Message, state: FSMContext):
     data = await state.get_data()
-    tasks = data["multiple_tasks"]
-    project = data.get("selected_project", "Общие")
-    deadline = data.get("selected_deadline", "")
-    await state.set_state(TaskCreation.confirming_multiple)
-    await message.answer(
-        format_multiple_tasks(tasks, project, deadline or "—", assignee or "—"),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple"),
-            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
-        ]]),
-        parse_mode="Markdown"
-    )
+    field = data.get("correcting")
+    value = message.text.strip()
+    if field == "deadline":
+        value = await parse_deadline(value) or value
+        await state.update_data(selected_deadline=value)
+    elif field == "assignee":
+        await state.update_data(selected_assignee=value)
+    await show_multiple_preview(message, state)
 
 
 # ─── Сохранение нескольких задач ───────────────────────────────────────────
@@ -252,11 +271,11 @@ async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
     saved = 0
     for t in tasks:
         add_task(
-            project=t.get("project") or project,
-            assignee=t.get("assignee") or assignee,
+            project=project,
+            assignee=assignee or t.get("assignee") or "",
             department=t.get("department") or "",
             title=t.get("title") or "Без названия",
-            deadline=t.get("deadline") or deadline,
+            deadline=deadline or t.get("deadline") or "",
             comment=t.get("description") or "",
         )
         saved += 1
@@ -268,7 +287,7 @@ async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ─── Редактирование поля ───────────────────────────────────────────────────
+# ─── Редактирование поля одной задачи ─────────────────────────────────────
 @router.callback_query(F.data.startswith("edit_"), TaskCreation.confirming)
 async def edit_field(callback: CallbackQuery, state: FSMContext):
     field = callback.data.replace("edit_", "")
