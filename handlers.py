@@ -21,6 +21,8 @@ class TaskCreation(StatesGroup):
     choosing_project = State()
     confirming = State()
     confirming_multiple = State()
+    waiting_for_deadline_multiple = State()
+    waiting_for_assignee_multiple = State()
 
 
 class ProjectAdding(StatesGroup):
@@ -72,15 +74,14 @@ def format_task_text(parsed):
     )
 
 
-def format_multiple_tasks(tasks, project):
+def format_multiple_tasks(tasks, project, deadline="—", assignee="—"):
     lines = [f"📋 *Найдено {len(tasks)} задач:*\n"]
     for i, t in enumerate(tasks, 1):
-        lines.append(
-            f"*{i}.* {t.get('title','—')}\n"
-            f"   👤 {t.get('assignee') or '—'} | 📅 {t.get('deadline') or '—'}\n"
-        )
-    lines.append(f"📁 *Проект:* {project}\n")
-    lines.append("Сохранить все задачи?")
+        lines.append(f"*{i}.* {t.get('title','—')}\n")
+    lines.append(f"📁 *Проект:* {project}")
+    lines.append(f"📅 *Срок:* {deadline}")
+    lines.append(f"👤 *Ответственный:* {assignee}")
+    lines.append("\nСохранить все задачи?")
     return "\n".join(lines)
 
 
@@ -141,7 +142,7 @@ async def process_task_text(message: Message, state: FSMContext):
     if result.get("is_multiple") and result.get("tasks"):
         tasks = result["tasks"]
         projects = get_projects()
-        await state.update_data(multiple_tasks=tasks)
+        await state.update_data(multiple_tasks=tasks, selected_deadline="", selected_assignee="")
 
         if projects:
             await state.set_state(TaskCreation.choosing_project)
@@ -152,13 +153,10 @@ async def process_task_text(message: Message, state: FSMContext):
             )
         else:
             await state.update_data(selected_project="Общие")
-            await state.set_state(TaskCreation.confirming_multiple)
+            await state.set_state(TaskCreation.waiting_for_deadline_multiple)
             await message.answer(
-                format_multiple_tasks(tasks, "Общие"),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple"),
-                    InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
-                ]]),
+                f"📋 Найдено *{len(tasks)} задач* → Проект: *Общие*\n\n"
+                f"📅 Введите срок для всех задач (например: 30.06.2026)\nИли нажмите /skip чтобы пропустить:",
                 parse_mode="Markdown"
             )
         return
@@ -187,15 +185,11 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
         return
 
     if data.get("multiple_tasks"):
-        tasks = data["multiple_tasks"]
         await state.update_data(selected_project=project)
-        await state.set_state(TaskCreation.confirming_multiple)
+        await state.set_state(TaskCreation.waiting_for_deadline_multiple)
         await callback.message.answer(
-            format_multiple_tasks(tasks, project),
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple"),
-                InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
-            ]]),
+            f"✅ Проект: *{project}*\n\n"
+            f"📅 Введите срок для всех задач (например: 30.06.2026)\nИли /skip чтобы пропустить:",
             parse_mode="Markdown"
         )
         await callback.answer()
@@ -209,20 +203,60 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+# ─── Срок для нескольких задач ─────────────────────────────────────────────
+@router.message(TaskCreation.waiting_for_deadline_multiple)
+async def set_deadline_multiple(message: Message, state: FSMContext):
+    value = message.text.strip()
+    if value != "/skip":
+        deadline = await parse_deadline(value) or value
+    else:
+        deadline = ""
+    await state.update_data(selected_deadline=deadline)
+    await state.set_state(TaskCreation.waiting_for_assignee_multiple)
+    await message.answer(
+        f"📅 Срок: *{deadline or '—'}*\n\n"
+        f"👤 Введите ответственного для всех задач\nИли /skip чтобы пропустить:",
+        parse_mode="Markdown"
+    )
+
+
+# ─── Ответственный для нескольких задач ───────────────────────────────────
+@router.message(TaskCreation.waiting_for_assignee_multiple)
+async def set_assignee_multiple(message: Message, state: FSMContext):
+    value = message.text.strip()
+    assignee = "" if value == "/skip" else value
+    await state.update_data(selected_assignee=assignee)
+    data = await state.get_data()
+    tasks = data["multiple_tasks"]
+    project = data.get("selected_project", "Общие")
+    deadline = data.get("selected_deadline", "")
+    await state.set_state(TaskCreation.confirming_multiple)
+    await message.answer(
+        format_multiple_tasks(tasks, project, deadline or "—", assignee or "—"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
+        ]]),
+        parse_mode="Markdown"
+    )
+
+
 # ─── Сохранение нескольких задач ───────────────────────────────────────────
 @router.callback_query(F.data == "confirm_multiple", TaskCreation.confirming_multiple)
 async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     tasks = data["multiple_tasks"]
     project = data.get("selected_project", "Общие")
+    deadline = data.get("selected_deadline", "")
+    assignee = data.get("selected_assignee", "")
     saved = 0
     for t in tasks:
         add_task(
             project=t.get("project") or project,
-            assignee=t.get("assignee") or "",
+            assignee=t.get("assignee") or assignee,
             department=t.get("department") or "",
             title=t.get("title") or "Без названия",
-            deadline=t.get("deadline") or "",
+            deadline=t.get("deadline") or deadline,
             comment=t.get("description") or "",
         )
         saved += 1
