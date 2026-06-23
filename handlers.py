@@ -29,7 +29,6 @@ class ProjectAdding(StatesGroup):
 
 class ImportAdding(StatesGroup):
     waiting_for_url = State()
-    waiting_for_name = State()
 
 
 FIELD_LABELS = {
@@ -138,7 +137,6 @@ async def process_task_text(message: Message, state: FSMContext):
         await state.clear()
         return
 
-    # Несколько задач
     if result.get("is_multiple") and result.get("tasks"):
         tasks = result["tasks"]
         projects = get_projects()
@@ -164,7 +162,6 @@ async def process_task_text(message: Message, state: FSMContext):
             )
         return
 
-    # Одна задача
     parsed = result
     await state.update_data(parsed=parsed)
     projects = get_projects()
@@ -188,7 +185,6 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    # Несколько задач
     if data.get("multiple_tasks"):
         tasks = data["multiple_tasks"]
         await state.update_data(selected_project=project)
@@ -204,7 +200,6 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    # Одна задача
     parsed = data["parsed"]
     parsed["project"] = project
     await state.update_data(parsed=parsed)
@@ -397,20 +392,10 @@ async def import_url(message: Message, state: FSMContext):
     except IndexError:
         await message.answer("❌ Неверная ссылка.")
         return
-    await state.update_data(spreadsheet_id=spreadsheet_id)
-    await state.set_state(ImportAdding.waiting_for_name)
-    await message.answer("📁 Введите название проекта для этих задач:")
-
-
-@router.message(ImportAdding.waiting_for_name)
-async def import_name(message: Message, state: FSMContext):
-    data = await state.get_data()
-    spreadsheet_id = data["spreadsheet_id"]
-    project_name = message.text.strip()
     await state.clear()
-    await message.answer(f"⏳ Импортирую задачи в *{project_name}*...", parse_mode="Markdown")
+    await message.answer("⏳ Импортирую задачи из всех листов...", parse_mode="Markdown")
     from importer import import_from_sheet
-    result = import_from_sheet(spreadsheet_id, project_name)
+    result = import_from_sheet(spreadsheet_id, "")
     if result["success"]:
         await message.answer(
             f"✅ Импорт завершён!\n\n"
