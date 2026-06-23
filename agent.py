@@ -5,33 +5,45 @@ from config import ANTHROPIC_API_KEY
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Ты — ассистент управления задачами. Извлеки из текста структурированную задачу.
-Верни ТОЛЬКО JSON без пояснений и без markdown.
+SYSTEM_PROMPT = """Ты — ассистент управления задачами в компании. Твоя работа — принять текст от пользователя и вернуть структурированную задачу.
 
-Формат:
+ПРАВИЛА:
+1. Исправь орфографические и грамматические ошибки в тексте задачи
+2. Сформулируй название задачи чётко и профессионально — как будто пишет опытный менеджер
+3. Сохрани исходный смысл — не добавляй то чего не было
+4. Извлеки ответственного, отдел, проект и срок если они упомянуты
+5. Если отдел не указан но понятен из контекста (например "бухгалтерия", "маркетинг", "HR") — подставь его
+6. Если срок указан относительно (в пятницу, через 3 дня, до конца недели) — вычисли дату от сегодня
+7. Комментарий — подробное описание задачи, тоже грамотно переформулированное
+
+Верни ТОЛЬКО валидный JSON без пояснений и без markdown:
 {
-  "title": "Краткое название задачи (до 60 символов)",
-  "description": "Подробное описание или комментарий",
+  "title": "Чёткое грамотное название задачи",
+  "description": "Подробное описание, исправленное и переформулированное",
   "assignee": "Имя ответственного или пустая строка",
-  "department": "Название отдела или пустая строка",
-  "project": "Название проекта или пустая строка",
+  "department": "Отдел или пустая строка",
+  "project": "Проект или пустая строка",
   "deadline": "YYYY-MM-DD или пустая строка"
-}
-
-Если дедлайн относительный (через 3 дня, в пятницу) — вычисли от сегодня.
-Если что-то не упомянуто — оставь пустую строку.
-Отвечай только валидным JSON."""
+}"""
 
 
 async def _call_claude(messages, system=None, max_tokens=600):
     try:
-        payload = {"model": "claude-sonnet-4-6", "max_tokens": max_tokens, "messages": messages}
+        payload = {
+            "model": "claude-sonnet-4-6",
+            "max_tokens": max_tokens,
+            "messages": messages
+        }
         if system:
             payload["system"] = system
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",
-                headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                headers={
+                    "x-api-key": ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json"
+                },
                 json=payload,
             )
             data = response.json()
@@ -41,38 +53,51 @@ async def _call_claude(messages, system=None, max_tokens=600):
         return None
 
 
-async def parse_task_with_ai(user_text, today):
+async def parse_task_with_ai(user_text: str, today: str) -> dict | None:
     raw = await _call_claude(
-        messages=[{"role": "user", "content": f"Сегодня {today}. Создай задачу:\n\n{user_text}"}],
+        messages=[{
+            "role": "user",
+            "content": f"Сегодня {today}. Обработай задачу:\n\n{user_text}"
+        }],
         system=SYSTEM_PROMPT,
-        max_tokens=500,
+        max_tokens=700,
     )
     if not raw:
         return None
     try:
         raw = raw.replace("```json", "").replace("```", "").strip()
         return json.loads(raw)
-    except Exception:
+    except Exception as e:
+        logger.error(f"Ошибка парсинга JSON: {e}, raw: {raw}")
         return None
 
 
-async def analyze_project_tasks(project_name, rows):
+async def parse_deadline(text: str) -> str:
+    from datetime import datetime
+    today = datetime.now().strftime("%Y-%m-%d")
+    raw = await _call_claude(
+        messages=[{
+            "role": "user",
+            "content": f"Сегодня {today}. Переведи срок '{text}' в формат YYYY-MM-DD. Верни ТОЛЬКО дату."
+        }],
+        max_tokens=20,
+    )
+    return raw.strip() if raw else text
+
+
+async def analyze_project_tasks(project_name: str, rows: list) -> str:
     if not rows or len(rows) < 2:
         return f"В проекте '{project_name}' данных нет."
-
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
     table_text = "\n".join(["\t".join(str(c) for c in row) for row in rows[:50]])
-
     raw = await _call_claude(
         messages=[{
             "role": "user",
             "content": (
                 f"Сегодня {today}. Таблица проекта '{project_name}'.\n"
-                f"Найди просроченные задачи (дедлайн прошёл) и задачи на сегодня.\n"
-                f"Верни краткий список для Telegram с эмодзи. "
-                f"Если просроченных нет — напиши '✅ Просроченных задач нет'.\n\n"
-                f"Таблица:\n{table_text}"
+                f"Найди просроченные задачи. Верни краткий список для Telegram с эмодзи. "
+                f"Если нет — напиши '✅ Просроченных задач нет'.\n\nТаблица:\n{table_text}"
             )
         }],
         max_tokens=800,
@@ -80,31 +105,23 @@ async def analyze_project_tasks(project_name, rows):
     return raw or f"Не удалось проанализировать '{project_name}'."
 
 
-async def generate_overdue_summary(tasks):
+async def generate_overdue_summary(tasks: list) -> str:
     if not tasks:
         return "🎉 Просроченных задач нет!"
     tasks_text = "\n".join(
-        f"- [{t['ID']}] {t.get('Задача','')} | {t.get('Ответственное лицо','')} | {t.get('Срок исполнения','')} | {t.get('_project','')}"
+        f"- [{t['id']}] {t['title']} | {t['assignee']} | {t['deadline']} | {t['project']}"
         for t in tasks
     )
     raw = await _call_claude(
-        messages=[{"role": "user", "content": f"Составь Telegram-уведомление о просроченных задачах (с эмодзи, до 10 строк):\n{tasks_text}"}],
+        messages=[{
+            "role": "user",
+            "content": f"Составь Telegram-уведомление о просроченных задачах (с эмодзи, до 10 строк):\n{tasks_text}"
+        }],
         max_tokens=600,
     )
     if raw:
         return raw
     lines = ["⚠️ *Просроченные задачи:*\n"]
     for t in tasks:
-        lines.append(f"🔴 [{t['ID']}] *{t.get('Задача','')}*\n   👤 {t.get('Ответственное лицо','—')} | 📅 {t.get('Срок исполнения','—')}")
+        lines.append(f"🔴 [{t['id']}] *{t['title']}*\n   👤 {t['assignee'] or '—'} | 📅 {t['deadline']}")
     return "\n".join(lines)
-
-
-async def parse_deadline(text: str) -> str:
-    """Конвертирует текстовый срок в YYYY-MM-DD."""
-    from datetime import datetime
-    today = datetime.now().strftime("%Y-%m-%d")
-    raw = await _call_claude(
-        messages=[{"role": "user", "content": f"Сегодня {today}. Переведи срок '{text}' в формат YYYY-MM-DD. Верни ТОЛЬКО дату, без пояснений."}],
-        max_tokens=20,
-    )
-    return raw.strip() if raw else text
