@@ -5,29 +5,44 @@ from config import ANTHROPIC_API_KEY
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Ты — ассистент управления задачами в компании. Твоя работа — принять текст от пользователя и вернуть структурированную задачу.
+SINGLE_TASK_PROMPT = """Ты — ассистент управления задачами. Обработай текст и верни структурированную задачу.
 
 ПРАВИЛА:
-1. Исправь орфографические и грамматические ошибки в тексте задачи
-2. Сформулируй название задачи чётко и профессионально — как будто пишет опытный менеджер
-3. Сохрани исходный смысл — не добавляй то чего не было
-4. Извлеки ответственного, отдел, проект и срок если они упомянуты
-5. Если отдел не указан но понятен из контекста (например "бухгалтерия", "маркетинг", "HR") — подставь его
-6. Если срок указан относительно (в пятницу, через 3 дня, до конца недели) — вычисли дату от сегодня
-7. Комментарий — подробное описание задачи, тоже грамотно переформулированное
+1. Исправь орфографические и грамматические ошибки
+2. Сформулируй название задачи чётко и профессионально
+3. Сохрани исходный смысл
+4. Извлеки ответственного, отдел, проект и срок если упомянуты
+5. Если отдел понятен из контекста — подставь его
+6. Если срок относительный — вычисли дату от сегодня
 
-Верни ТОЛЬКО валидный JSON без пояснений и без markdown:
+Верни ТОЛЬКО валидный JSON:
 {
-  "title": "Чёткое грамотное название задачи",
-  "description": "Подробное описание, исправленное и переформулированное",
-  "assignee": "Имя ответственного или пустая строка",
+  "is_multiple": false,
+  "title": "Чёткое название задачи",
+  "description": "Подробное описание",
+  "assignee": "Имя или пустая строка",
   "department": "Отдел или пустая строка",
   "project": "Проект или пустая строка",
   "deadline": "YYYY-MM-DD или пустая строка"
+}
+
+Если в тексте НЕСКОЛЬКО задач (список, нумерация, несколько действий) — верни:
+{
+  "is_multiple": true,
+  "tasks": [
+    {
+      "title": "Название задачи 1",
+      "description": "Описание",
+      "assignee": "Ответственный или пустая строка",
+      "department": "Отдел или пустая строка", 
+      "project": "Проект или пустая строка",
+      "deadline": "YYYY-MM-DD или пустая строка"
+    }
+  ]
 }"""
 
 
-async def _call_claude(messages, system=None, max_tokens=600):
+async def _call_claude(messages, system=None, max_tokens=2000):
     try:
         payload = {
             "model": "claude-sonnet-4-6",
@@ -53,14 +68,15 @@ async def _call_claude(messages, system=None, max_tokens=600):
         return None
 
 
-async def parse_task_with_ai(user_text: str, today: str) -> dict | None:
+async def parse_task_with_ai(user_text: str, today: str):
+    """Возвращает одну задачу или список задач."""
     raw = await _call_claude(
         messages=[{
             "role": "user",
-            "content": f"Сегодня {today}. Обработай задачу:\n\n{user_text}"
+            "content": f"Сегодня {today}. Обработай:\n\n{user_text}"
         }],
-        system=SYSTEM_PROMPT,
-        max_tokens=700,
+        system=SINGLE_TASK_PROMPT,
+        max_tokens=2000,
     )
     if not raw:
         return None
@@ -68,7 +84,7 @@ async def parse_task_with_ai(user_text: str, today: str) -> dict | None:
         raw = raw.replace("```json", "").replace("```", "").strip()
         return json.loads(raw)
     except Exception as e:
-        logger.error(f"Ошибка парсинга JSON: {e}, raw: {raw}")
+        logger.error(f"Ошибка парсинга JSON: {e}")
         return None
 
 

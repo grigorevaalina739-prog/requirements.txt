@@ -20,9 +20,15 @@ class TaskCreation(StatesGroup):
     editing_field = State()
     choosing_project = State()
     confirming = State()
+    confirming_multiple = State()
 
 
 class ProjectAdding(StatesGroup):
+    waiting_for_name = State()
+
+
+class ImportAdding(StatesGroup):
+    waiting_for_url = State()
     waiting_for_name = State()
 
 
@@ -67,44 +73,57 @@ def format_task_text(parsed):
     )
 
 
+def format_multiple_tasks(tasks, project):
+    lines = [f"📋 *Найдено {len(tasks)} задач:*\n"]
+    for i, t in enumerate(tasks, 1):
+        lines.append(
+            f"*{i}.* {t.get('title','—')}\n"
+            f"   👤 {t.get('assignee') or '—'} | 📅 {t.get('deadline') or '—'}\n"
+        )
+    lines.append(f"📁 *Проект:* {project}\n")
+    lines.append("Сохранить все задачи?")
+    return "\n".join(lines)
+
+
 def projects_keyboard(projects):
     buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"proj_{p['name']}")] for p in projects]
     buttons.append([InlineKeyboardButton(text="➕ Новый проект", callback_data="proj_new")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+# ─── /start ────────────────────────────────────────────────────────────────
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(
         "👋 Привет! Я агент управления задачами.\n\n"
-        "➕ /newtask — создать задачу\n"
+        "➕ /newtask — создать задачу (или список задач)\n"
         "📊 /dashboard — ссылка на дашборд\n"
         "📋 /tasks — задачи по проектам\n"
         "✅ /done <ID> — отметить выполненной\n"
         "⚠️ /overdue — просроченные\n"
         "📁 /projects — список проектов\n"
-        "🆕 /newproject — создать проект"
+        "🆕 /newproject — создать проект\n"
+        "📥 /import — импорт из Google Sheets"
     )
 
 
 @router.message(Command("dashboard"))
-async def cmd_dashboard(request: Message):
+async def cmd_dashboard(message: Message):
     from config import RAILWAY_PUBLIC_DOMAIN
     url = f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else "http://localhost:8080"
-    await request.answer(
-        f"📊 *Дашборд задач:*\n\n[Открыть дашборд]({url})\n\n"
-        f"Там видны все задачи, статистика и фильтры по проектам.",
+    await message.answer(
+        f"📊 [Открыть дашборд]({url})",
         parse_mode="Markdown"
     )
 
 
+# ─── /newtask ──────────────────────────────────────────────────────────────
 @router.message(Command("newtask"))
 async def cmd_newtask(message: Message, state: FSMContext):
     await state.set_state(TaskCreation.waiting_for_text)
     await message.answer(
-        "📝 Опишите задачу — AI заполнит поля автоматически.\n\n"
-        "Пример: _Подготовить отчёт, отдел финансов, ответственный Алексей, до пятницы_",
-        parse_mode="Markdown"
+        "📝 Опишите задачу или список задач — AI разберёт автоматически.\n\n"
+        "Можно писать с ошибками, AI исправит и структурирует.",
     )
 
 
@@ -112,11 +131,41 @@ async def cmd_newtask(message: Message, state: FSMContext):
 async def process_task_text(message: Message, state: FSMContext):
     await message.answer("🤖 Анализирую...")
     today = datetime.now().strftime("%Y-%m-%d")
-    parsed = await parse_task_with_ai(message.text, today)
-    if not parsed:
+    result = await parse_task_with_ai(message.text, today)
+
+    if not result:
         await message.answer("❌ Не удалось разобрать. Попробуйте /newtask заново.")
         await state.clear()
         return
+
+    # Несколько задач
+    if result.get("is_multiple") and result.get("tasks"):
+        tasks = result["tasks"]
+        projects = get_projects()
+        await state.update_data(multiple_tasks=tasks)
+
+        if projects:
+            await state.set_state(TaskCreation.choosing_project)
+            await message.answer(
+                f"📋 Найдено *{len(tasks)} задач*. В какой проект добавить?",
+                reply_markup=projects_keyboard(projects),
+                parse_mode="Markdown"
+            )
+        else:
+            await state.update_data(selected_project="Общие")
+            await state.set_state(TaskCreation.confirming_multiple)
+            await message.answer(
+                format_multiple_tasks(tasks, "Общие"),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                    InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple"),
+                    InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
+                ]]),
+                parse_mode="Markdown"
+            )
+        return
+
+    # Одна задача
+    parsed = result
     await state.update_data(parsed=parsed)
     projects = get_projects()
     if not parsed.get("project") and projects:
@@ -127,15 +176,35 @@ async def process_task_text(message: Message, state: FSMContext):
         await message.answer(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
 
 
+# ─── Выбор проекта ─────────────────────────────────────────────────────────
 @router.callback_query(F.data.startswith("proj_"), TaskCreation.choosing_project)
 async def choose_project(callback: CallbackQuery, state: FSMContext):
     project = callback.data.replace("proj_", "")
+    data = await state.get_data()
+
     if project == "new":
         await state.set_state(ProjectAdding.waiting_for_name)
         await callback.message.answer("📁 Введите название нового проекта:")
         await callback.answer()
         return
-    data = await state.get_data()
+
+    # Несколько задач
+    if data.get("multiple_tasks"):
+        tasks = data["multiple_tasks"]
+        await state.update_data(selected_project=project)
+        await state.set_state(TaskCreation.confirming_multiple)
+        await callback.message.answer(
+            format_multiple_tasks(tasks, project),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
+            ]]),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+        return
+
+    # Одна задача
     parsed = data["parsed"]
     parsed["project"] = project
     await state.update_data(parsed=parsed)
@@ -144,6 +213,32 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+# ─── Сохранение нескольких задач ───────────────────────────────────────────
+@router.callback_query(F.data == "confirm_multiple", TaskCreation.confirming_multiple)
+async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    tasks = data["multiple_tasks"]
+    project = data.get("selected_project", "Общие")
+    saved = 0
+    for t in tasks:
+        add_task(
+            project=t.get("project") or project,
+            assignee=t.get("assignee") or "",
+            department=t.get("department") or "",
+            title=t.get("title") or "Без названия",
+            deadline=t.get("deadline") or "",
+            comment=t.get("description") or "",
+        )
+        saved += 1
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ Сохранено *{saved} задач* в проект *{project}*!",
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+# ─── Редактирование поля ───────────────────────────────────────────────────
 @router.callback_query(F.data.startswith("edit_"), TaskCreation.confirming)
 async def edit_field(callback: CallbackQuery, state: FSMContext):
     field = callback.data.replace("edit_", "")
@@ -189,7 +284,10 @@ async def confirm_task(callback: CallbackQuery, state: FSMContext):
         comment=p.get("description") or "",
     )
     await state.clear()
-    await callback.message.edit_text(f"✅ Задача #{task_id} добавлена в проект *{project}*!", parse_mode="Markdown")
+    await callback.message.edit_text(
+        f"✅ Задача #{task_id} добавлена в *{project}*!",
+        parse_mode="Markdown"
+    )
     await callback.answer()
 
 
@@ -200,11 +298,12 @@ async def cancel_task(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+# ─── /tasks ────────────────────────────────────────────────────────────────
 @router.message(Command("tasks"))
 async def cmd_tasks(message: Message):
     projects = get_projects()
     if not projects:
-        await message.answer("📋 Задач нет. Создайте: /newtask")
+        await message.answer("📋 Задач нет. /newtask")
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"show_{p['name']}")] for p in projects
@@ -228,6 +327,7 @@ async def show_project_tasks(callback: CallbackQuery):
     await callback.answer()
 
 
+# ─── /done ─────────────────────────────────────────────────────────────────
 @router.message(Command("done"))
 async def cmd_done(message: Message):
     parts = message.text.split()
@@ -238,6 +338,7 @@ async def cmd_done(message: Message):
     await message.answer(f"✅ Задача #{parts[1]} выполнена!")
 
 
+# ─── /overdue ──────────────────────────────────────────────────────────────
 @router.message(Command("overdue"))
 async def cmd_overdue(message: Message):
     tasks = get_overdue_tasks()
@@ -250,6 +351,7 @@ async def cmd_overdue(message: Message):
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
+# ─── /projects ─────────────────────────────────────────────────────────────
 @router.message(Command("projects"))
 async def cmd_projects(message: Message):
     projects = get_projects()
@@ -265,6 +367,7 @@ async def cmd_projects(message: Message):
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
+# ─── /newproject ───────────────────────────────────────────────────────────
 @router.message(Command("newproject"))
 async def cmd_newproject(message: Message, state: FSMContext):
     await state.set_state(ProjectAdding.waiting_for_name)
@@ -280,11 +383,6 @@ async def process_project_name(message: Message, state: FSMContext):
 
 
 # ─── /import ───────────────────────────────────────────────────────────────
-class ImportAdding(StatesGroup):
-    waiting_for_url = State()
-    waiting_for_name = State()
-
-
 @router.message(Command("import"))
 async def cmd_import(message: Message, state: FSMContext):
     await state.set_state(ImportAdding.waiting_for_url)
@@ -310,15 +408,15 @@ async def import_name(message: Message, state: FSMContext):
     spreadsheet_id = data["spreadsheet_id"]
     project_name = message.text.strip()
     await state.clear()
-    await message.answer(f"⏳ Импортирую задачи из таблицы в проект *{project_name}*...", parse_mode="Markdown")
+    await message.answer(f"⏳ Импортирую задачи в *{project_name}*...", parse_mode="Markdown")
     from importer import import_from_sheet
     result = import_from_sheet(spreadsheet_id, project_name)
     if result["success"]:
         await message.answer(
             f"✅ Импорт завершён!\n\n"
-            f"📥 Добавлено: {result['imported']} задач\n"
-            f"⏭ Пропущено (уже есть): {result['skipped']}\n\n"
-            f"Откройте дашборд чтобы увидеть задачи.",
+            f"📥 Добавлено: *{result['imported']}* задач\n"
+            f"⏭ Пропущено: *{result['skipped']}*",
+            parse_mode="Markdown"
         )
     else:
-        await message.answer(f"❌ Ошибка импорта: {result['error']}")
+        await message.answer(f"❌ Ошибка: {result['error']}")
