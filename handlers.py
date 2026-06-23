@@ -98,7 +98,7 @@ def multiple_confirm_keyboard():
 
 
 def projects_keyboard(projects):
-    buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"proj_{p['name']}")] for p in projects]
+    buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"proj_{i}")] for i, p in enumerate(projects)]
     buttons.append([InlineKeyboardButton(text="➕ Новый проект", callback_data="proj_new")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -195,14 +195,20 @@ async def process_task_text(message: Message, state: FSMContext):
 # ─── Выбор проекта ─────────────────────────────────────────────────────────
 @router.callback_query(F.data.startswith("proj_"), TaskCreation.choosing_project)
 async def choose_project(callback: CallbackQuery, state: FSMContext):
-    project = callback.data.replace("proj_", "")
+    proj_data = callback.data.replace("proj_", "")
     data = await state.get_data()
 
-    if project == "new":
+    if proj_data == "new":
         await state.set_state(ProjectAdding.waiting_for_name)
         await callback.message.answer("📁 Введите название нового проекта:")
         await callback.answer()
         return
+
+    projects = get_projects()
+    try:
+        project = projects[int(proj_data)]["name"]
+    except (ValueError, IndexError):
+        project = proj_data
 
     if data.get("multiple_tasks"):
         await state.update_data(selected_project=project)
