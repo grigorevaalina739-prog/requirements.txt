@@ -32,10 +32,6 @@ class ProjectAdding(StatesGroup):
     waiting_for_name = State()
 
 
-class ImportAdding(StatesGroup):
-    waiting_for_url = State()
-
-
 class TaskEditing(StatesGroup):
     choosing_field = State()
     editing_field = State()
@@ -239,7 +235,6 @@ async def cmd_start(message: Message):
         "⚠️ /overdue — просроченные\n"
         "📁 /projects — список проектов\n"
         "🆕 /newproject — создать проект\n"
-        "📥 /import — импорт из Google Sheets\n"
         "👤 /register — зарегистрироваться для уведомлений"
     )
 
@@ -409,7 +404,6 @@ async def edit_tasks_list(callback: CallbackQuery, state: FSMContext):
 async def eom_choose_field(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_")
     action = parts[1]
-
     data = await state.get_data()
     tasks = data["multiple_tasks"]
     task_idx = data.get("editing_task_idx", 0)
@@ -867,33 +861,3 @@ async def process_project_name(message: Message, state: FSMContext):
     add_project(name)
     await state.clear()
     await message.answer(f"✅ Проект *{name}* создан!", parse_mode="Markdown")
-
-
-# ─── /import ───────────────────────────────────────────────────────────────
-@router.message(Command("import"))
-async def cmd_import(message: Message, state: FSMContext):
-    await state.set_state(ImportAdding.waiting_for_url)
-    await message.answer("🔗 Вставьте ссылку на Google таблицу для импорта:")
-
-
-@router.message(ImportAdding.waiting_for_url)
-async def import_url(message: Message, state: FSMContext):
-    url = message.text.strip()
-    try:
-        spreadsheet_id = url.split("/d/")[1].split("/")[0]
-    except IndexError:
-        await message.answer("❌ Неверная ссылка.")
-        return
-    await state.clear()
-    await message.answer("⏳ Импортирую задачи из всех листов...", parse_mode="Markdown")
-    from importer import import_from_sheet
-    result = import_from_sheet(spreadsheet_id, "")
-    if result["success"]:
-        await message.answer(
-            f"✅ Импорт завершён!\n\n"
-            f"📥 Добавлено: *{result['imported']}* задач\n"
-            f"⏭ Пропущено: *{result['skipped']}*",
-            parse_mode="Markdown"
-        )
-    else:
-        await message.answer(f"❌ Ошибка: {result['error']}")
