@@ -50,7 +50,7 @@ def format_deadline(deadline_str):
     except Exception:
         return deadline_str
 
-def task_row(t):
+def task_row(t, project_filter="", status_filter=""):
     today = datetime.now().strftime("%Y-%m-%d")
     overdue = t["deadline"] and t["deadline"] < today and t["status"] != "Выполнена"
     status_color = {
@@ -76,6 +76,20 @@ def task_row(t):
     project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};border:1px solid {pc['border']}40;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
     deadline_html = format_deadline(t["deadline"]) if t["status"] != "Выполнена" else f"<span style='color:#6B7280'>{t['deadline'] or '—'}</span>"
 
+    back_url = f"/?project={project_filter}&status={status_filter}"
+
+    if t["status"] == "Выполнена":
+        action_btn = f"""<a href="/reopen/{t['id']}?back={back_url}" title="Переоткрыть" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F3F4F6;color:#6B7280;text-decoration:none;font-size:15px;" onclick="return confirm('Переоткрыть задачу?')">↩️</a>"""
+    else:
+        action_btn = f"""<a href="/done/{t['id']}?back={back_url}" title="Завершить" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#D1FAE5;color:#059669;text-decoration:none;font-size:15px;" onclick="return confirm('Отметить как выполненную?')">✅</a>"""
+
+    actions_html = f"""<div style="display:flex;gap:4px;align-items:center;">
+    <a href="/edit/{t['id']}" title="Редактировать" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#EFF6FF;color:#3B82F6;text-decoration:none;font-size:15px;">✏️</a>
+    <a href="/comment/{t['id']}" title="Комментарий" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F5F3FF;color:#7C3AED;text-decoration:none;font-size:15px;">💬</a>
+    {action_btn}
+    <a href="/attach/{t['id']}" title="Вложения" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#FFF7ED;color:#EA580C;text-decoration:none;font-size:15px;">📎</a>
+</div>"""
+
     return f"""
 <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
     <td style="padding:10px 12px; color:#6B7280; font-size:13px; white-space:nowrap;">#{t['id']}</td>
@@ -90,6 +104,7 @@ def task_row(t):
         </span>
     </td>
     <td style="padding:10px 12px; color:#4B5563; font-size:13px; min-width:180px;">{comment_html}</td>
+    <td style="padding:10px 12px; white-space:nowrap;">{actions_html}</td>
 </tr>"""
 
 def calc_stats(tasks):
@@ -133,10 +148,10 @@ async def dashboard(request):
         f'<option value="{s}" {"selected" if s==status_filter else ""}>{s}</option>'
         for s in ["Открыта", "В работе", "Выполнена"]
     )
-    rows = "".join(task_row(t) for t in tasks)
+    rows = "".join(task_row(t, selected, status_filter) for t in tasks)
 
     if not tasks:
-        rows = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
+        rows = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
 
     title = f"Проект: {selected}" if selected else "Все проекты"
     progress_color = "#10B981" if stats['percent'] == 100 else "#3B82F6"
@@ -174,6 +189,9 @@ select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font
 table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
 thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; white-space: nowrap; }}
 tr:hover td {{ background: #F9FAFB; }}
+tr:hover .row-actions a {{ opacity: 1; }}
+.row-actions a {{ opacity: 0.4; transition: opacity .15s; }}
+.row-actions a:hover {{ opacity: 1 !important; transform: scale(1.1); }}
 </style>
 </head>
 <body>
@@ -224,7 +242,7 @@ tr:hover td {{ background: #F9FAFB; }}
         <thead>
             <tr>
                 <th>ID</th><th>Задача</th><th>Ответственный</th><th>Отдел</th>
-                <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий сотрудника</th>
+                <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий</th><th>Действия</th>
             </tr>
         </thead>
         <tbody>{rows}</tbody>
@@ -238,13 +256,15 @@ tr:hover td {{ background: #F9FAFB; }}
 async def mark_done(request):
     task_id = int(request.match_info["task_id"])
     update_status(task_id, "Выполнена")
-    raise web.HTTPFound("/")
+    back = request.rel_url.query.get("back", "/")
+    raise web.HTTPFound(back)
 
 @routes.get("/reopen/{task_id}")
 async def reopen_task(request):
     task_id = int(request.match_info["task_id"])
     update_status(task_id, "Открыта")
-    raise web.HTTPFound("/")
+    back = request.rel_url.query.get("back", "/")
+    raise web.HTTPFound(back)
 
 def create_app():
     app = web.Application()
