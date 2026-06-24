@@ -2,8 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web
-from database import get_tasks, get_projects, get_stats, update_status
-import json
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments
 from datetime import datetime
 
 routes = web.RouteTableDef()
@@ -19,6 +18,19 @@ def task_row(t):
     }.get(t["status"], "#6B7280")
     row_bg = "#FEE2E2" if overdue else "white"
 
+    # Берём только комментарии от сотрудников из таблицы task_comments
+    comments = get_task_comments(t["id"])
+    if comments:
+        last = comments[-1]
+        if last.get("file_id"):
+            comment_text = f"📎 {last['author']}: {last['file_name']}"
+        else:
+            comment_text = f"💬 {last['author']}: {last['text'][:80]}"
+        comment_count = f" <span style='color:#9CA3AF;font-size:11px;'>({len(comments)})</span>" if len(comments) > 1 else ""
+        comment_html = f"{comment_text}{comment_count}"
+    else:
+        comment_html = "—"
+
     return f"""
     <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
         <td style="padding:10px 12px; color:#6B7280; font-size:13px;">#{t['id']}</td>
@@ -32,7 +44,7 @@ def task_row(t):
                 {t['status']}
             </span>
         </td>
-        <td style="padding:10px 12px; color:#4B5563; font-size:13px;">{t['comment'] or '—'}</td>
+        <td style="padding:10px 12px; color:#4B5563; font-size:13px;">{comment_html}</td>
     </tr>"""
 
 
@@ -81,7 +93,6 @@ async def dashboard(request):
   .table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
   table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; }}
   thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; }}
-  .overdue-badge {{ background: #FEE2E2; color: #DC2626; padding: 2px 8px; border-radius: 4px; font-size: 11px; }}
 </style>
 </head>
 <body>
@@ -113,7 +124,7 @@ async def dashboard(request):
     <thead>
       <tr>
         <th>ID</th><th>Задача</th><th>Ответственный</th><th>Отдел</th>
-        <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий</th>
+        <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий сотрудника</th>
       </tr>
     </thead>
     <tbody>{rows}</tbody>
