@@ -4,10 +4,9 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiohttp import web
-
 from config import BOT_TOKEN
 from handlers import router
-from scheduler import check_overdue_tasks
+from scheduler import check_overdue_tasks, check_deadline_reminders
 from database import init_db
 from dashboard import create_app
 
@@ -25,8 +24,17 @@ async def main():
     dp.include_router(router)
 
     # Планировщик
-    scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+    scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
+    
+    # Просроченные задачи — каждый день в 9:00
     scheduler.add_job(check_overdue_tasks, trigger="cron", hour=9, minute=0, args=[bot])
+    
+    # Уведомление за 1 день — каждый день в 10:00
+    scheduler.add_job(check_deadline_reminders, trigger="cron", hour=10, minute=0, args=[bot])
+    
+    # Уведомление в день дедлайна — каждый день в 8:00
+    scheduler.add_job(check_deadline_reminders, trigger="cron", hour=8, minute=0, args=[bot])
+
     scheduler.start()
 
     # Веб-дашборд
