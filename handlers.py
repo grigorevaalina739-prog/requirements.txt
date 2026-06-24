@@ -10,7 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 from agent import parse_task_with_ai, parse_deadline, analyze_project_tasks
 from database import (add_task, get_tasks, update_status, get_projects,
                       add_project, get_overdue_tasks, get_stats,
-                      register_user, get_user_by_name)
+                      register_user, get_user_by_name, get_conn)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -33,18 +33,23 @@ class ImportAdding(StatesGroup):
     waiting_for_url = State()
 
 
+class TaskEditing(StatesGroup):
+    choosing_field = State()
+    editing_field = State()
+    choosing_project = State()
+
+
 FIELD_LABELS = {
     "title": "Задача",
     "assignee": "Ответственный",
     "department": "Отдел",
     "project": "Проект",
-    "deadline": "Срок (ГГГГ-ММ-ДД или текстом)",
-    "description": "Комментарий",
+    "deadline": "Срок",
+    "comment": "Комментарий",
 }
 
 
 async def notify_assignee(bot: Bot, assignee: str, title: str, project: str, deadline: str):
-    """Отправляет уведомление ответственному если он зарегистрирован."""
     if not assignee:
         return
     user = get_user_by_name(assignee)
@@ -81,6 +86,17 @@ def task_keyboard(parsed):
     ])
 
 
+def edit_task_keyboard(task_id):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📌 Изменить задачу", callback_data=f"etask_title_{task_id}")],
+        [InlineKeyboardButton(text="👤 Изменить ответственного", callback_data=f"etask_assignee_{task_id}")],
+        [InlineKeyboardButton(text="📅 Изменить срок", callback_data=f"etask_deadline_{task_id}")],
+        [InlineKeyboardButton(text="📁 Изменить проект", callback_data=f"etask_project_{task_id}")],
+        [InlineKeyboardButton(text="💬 Изменить комментарий", callback_data=f"etask_comment_{task_id}")],
+        [InlineKeyboardButton(text="❌ Закрыть", callback_data="cancel_task")],
+    ])
+
+
 def format_task_text(parsed):
     return (
         f"📋 *Проверьте задачу:*\n\n"
@@ -91,6 +107,19 @@ def format_task_text(parsed):
         f"📅 *Срок:* {parsed.get('deadline') or '—'}\n"
         f"💬 *Комментарий:* {parsed.get('description') or '—'}\n\n"
         f"_Нажмите поле чтобы изменить._"
+    )
+
+
+def format_existing_task(t):
+    return (
+        f"✏️ *Редактирование задачи #{t['id']}:*\n\n"
+        f"📌 *Задача:* {t.get('title') or '—'}\n"
+        f"👤 *Ответственный:* {t.get('assignee') or '—'}\n"
+        f"🏢 *Отдел:* {t.get('department') or '—'}\n"
+        f"📁 *Проект:* {t.get('project') or '—'}\n"
+        f"📅 *Срок:* {t.get('deadline') or '—'}\n"
+        f"💬 *Комментарий:* {t.get('comment') or '—'}\n\n"
+        f"_Выберите поле для изменения._"
     )
 
 
@@ -126,6 +155,11 @@ def projects_keyboard(projects):
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def projects_keyboard_for_edit(projects, task_id):
+    buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"eproj_{i}_{task_id}")] for i, p in enumerate(projects)]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 async def show_multiple_preview(target, state, edit=False):
     data = await state.get_data()
     tasks = data["multiple_tasks"]
@@ -151,6 +185,7 @@ async def cmd_start(message: Message):
     await message.answer(
         "👋 Привет! Я агент управления задачами.\n\n"
         "➕ /newtask — создать задачу\n"
+        "✏️ /edit <ID> — редактировать задачу\n"
         "📊 /dashboard — дашборд\n"
         "📋 /tasks — задачи по проектам\n"
         "✅ /done <ID> — отметить выполненной\n"
@@ -186,6 +221,99 @@ async def cmd_register(message: Message):
     await message.answer(
         f"✅ Вы зарегистрированы как *{name}*!\n\n"
         f"Теперь вы будете получать уведомления когда вам назначают задачи.",
+        parse_mode="Markdown"
+    )
+
+
+# ─── /edit ─────────────────────────────────────────────────────────────────
+@router.message(Command("edit"))
+async def cmd_edit(message: Message, state: FSMContext):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("Укажите ID задачи: /edit 5")
+        return
+    task_id = int(parts[1])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        await message.answer(f"❌ Задача #{task_id} не найдена.")
+        return
+    await state.update_data(editing_task_id=task_id)
+    await state.set_state(TaskEditing.choosing_field)
+    await message.answer(
+        format_existing_task(task),
+        reply_markup=edit_task_keyboard(task_id),
+        parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data.startswith("etask_"), TaskEditing.choosing_field)
+async def etask_choose_field(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    field = parts[1]
+    task_id = parts[2]
+    await state.update_data(etask_field=field, editing_task_id=int(task_id))
+
+    if field == "project":
+        projects = get_projects()
+        await state.set_state(TaskEditing.choosing_project)
+        await callback.message.answer("📁 Выберите проект:", reply_markup=projects_keyboard_for_edit(projects, task_id))
+        await callback.answer()
+        return
+
+    labels = {
+        "title": "название задачи",
+        "assignee": "ответственного",
+        "deadline": "срок (например: 30.06.2026)",
+        "comment": "комментарий",
+    }
+    await state.set_state(TaskEditing.editing_field)
+    await callback.message.answer(f"✏️ Введите новый {labels.get(field, field)}:")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("eproj_"), TaskEditing.choosing_project)
+async def etask_choose_project(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    proj_idx = int(parts[1])
+    task_id = int(parts[2])
+    projects = get_projects()
+    try:
+        project = projects[proj_idx]["name"]
+    except IndexError:
+        project = ""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET project=? WHERE id=?", (project, task_id))
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    await state.set_state(TaskEditing.choosing_field)
+    await callback.message.answer(
+        format_existing_task(task),
+        reply_markup=edit_task_keyboard(task_id),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.message(TaskEditing.editing_field)
+async def etask_save_field(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get("etask_field")
+    task_id = data.get("editing_task_id")
+    value = message.text.strip()
+
+    if field == "deadline":
+        value = await parse_deadline(value) or value
+
+    with get_conn() as conn:
+        conn.execute(f"UPDATE tasks SET {field}=? WHERE id=?", (value, task_id))
+
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    await state.set_state(TaskEditing.choosing_field)
+    await message.answer(
+        format_existing_task(task),
+        reply_markup=edit_task_keyboard(task_id),
         parse_mode="Markdown"
     )
 
@@ -342,7 +470,7 @@ async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ─── Редактирование одной задачи ──────────────────────────────────────────
+# ─── Редактирование одной задачи (при создании) ───────────────────────────
 @router.callback_query(F.data.startswith("edit_"), TaskCreation.confirming)
 async def edit_field(callback: CallbackQuery, state: FSMContext):
     field = callback.data.replace("edit_", "")
@@ -498,7 +626,6 @@ async def process_project_name(message: Message, state: FSMContext):
 # ─── /cleartasks ───────────────────────────────────────────────────────────
 @router.message(Command("cleartasks"))
 async def cmd_cleartasks(message: Message):
-    from database import get_conn
     with get_conn() as conn:
         conn.execute("DELETE FROM tasks")
         conn.execute("DELETE FROM projects")
