@@ -3,13 +3,19 @@
 """
 from aiohttp import web
 from database import get_tasks, get_projects, get_stats, update_status, get_task_comments
-from datetime import datetime
+from datetime import datetime, date
 
 routes = web.RouteTableDef()
 
 PROJECT_COLORS = {
     "board miniso": {"bg": "#FEE2E2", "text": "#DC2626", "border": "#DC2626"},
     "сверка баз": {"bg": "#DBEAFE", "text": "#1D4ED8", "border": "#1D4ED8"},
+}
+
+MONTHS_RU = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+    5: "мая", 6: "июня", 7: "июля", 8: "августа",
+    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
 }
 
 def get_project_color(project_name):
@@ -19,6 +25,31 @@ def get_project_color(project_name):
             return v
     return {"bg": "#F3F4F6", "text": "#374151", "border": "#6B7280"}
 
+def format_deadline(deadline_str):
+    if not deadline_str:
+        return "—"
+    try:
+        dl = date.fromisoformat(deadline_str)
+        today = date.today()
+        delta = (dl - today).days
+        day_str = f"{dl.day} {MONTHS_RU[dl.month]}"
+        if delta < 0:
+            days_over = abs(delta)
+            noun = "день" if days_over % 10 == 1 and days_over % 100 != 11 else                    "дня" if 2 <= days_over % 10 <= 4 and not (12 <= days_over % 100 <= 14) else "дней"
+            return f"""<div style="display:inline-flex;align-items:center;gap:6px;background:#FEE2E2;border-radius:8px;padding:4px 10px;">
+<span style="color:#DC2626;font-size:16px;">●</span>
+<span style="color:#DC2626;font-weight:600;font-size:13px;">Просрочено на {days_over} {noun}</span>
+</div>"""
+        else:
+            noun = "день" if delta % 10 == 1 and delta % 100 != 11 else                    "дня" if 2 <= delta % 10 <= 4 and not (12 <= delta % 100 <= 14) else "дней"
+            color = "#EF4444" if delta <= 2 else "#F59E0B" if delta <= 7 else "#10B981"
+            return f"""<div style="display:inline-block;background:#F9FAFB;border-radius:8px;padding:4px 10px;">
+<div style="font-weight:600;font-size:13px;color:#111827;">{day_str}</div>
+<div style="font-size:11px;color:{color};font-weight:500;">Осталось {delta} {noun}</div>
+</div>"""
+    except Exception:
+        return deadline_str
+
 def task_row(t):
     today = datetime.now().strftime("%Y-%m-%d")
     overdue = t["deadline"] and t["deadline"] < today and t["status"] != "Выполнена"
@@ -27,7 +58,7 @@ def task_row(t):
         "В работе": "#F59E0B",
         "Выполнена": "#10B981",
     }.get(t["status"], "#6B7280")
-    row_bg = "#FFF0F0" if overdue else "white"
+    row_bg = "#FFF5F5" if overdue else "white"
 
     comments = get_task_comments(t["id"])
     if comments:
@@ -43,6 +74,7 @@ def task_row(t):
 
     pc = get_project_color(t["project"])
     project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};border:1px solid {pc['border']}40;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
+    deadline_html = format_deadline(t["deadline"]) if t["status"] != "Выполнена" else f"<span style='color:#6B7280'>{t['deadline'] or '—'}</span>"
 
     return f"""
 <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
@@ -51,7 +83,7 @@ def task_row(t):
     <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['assignee'] or '—'}</td>
     <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['department'] or '—'}</td>
     <td style="padding:10px 12px; white-space:nowrap;">{project_badge}</td>
-    <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['deadline'] or '—'}</td>
+    <td style="padding:10px 12px; min-width:160px;">{deadline_html}</td>
     <td style="padding:10px 12px; white-space:nowrap;">
         <span style="background:{status_color}20; color:{status_color}; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600;">
             {t['status']}
@@ -107,7 +139,6 @@ async def dashboard(request):
         rows = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
 
     title = f"Проект: {selected}" if selected else "Все проекты"
-
     progress_color = "#10B981" if stats['percent'] == 100 else "#3B82F6"
 
     html = f"""<!DOCTYPE html>
