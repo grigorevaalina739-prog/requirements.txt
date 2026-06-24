@@ -18,7 +18,6 @@ def task_row(t):
     }.get(t["status"], "#6B7280")
     row_bg = "#FEE2E2" if overdue else "white"
 
-    # Берём только комментарии от сотрудников из таблицы task_comments
     comments = get_task_comments(t["id"])
     if comments:
         last = comments[-1]
@@ -48,14 +47,25 @@ def task_row(t):
     </tr>"""
 
 
+def calc_stats(tasks):
+    today = datetime.now().strftime("%Y-%m-%d")
+    total = len(tasks)
+    open_ = sum(1 for t in tasks if t["status"] == "Открыта")
+    done = sum(1 for t in tasks if t["status"] == "Выполнена")
+    overdue = sum(1 for t in tasks if t["status"] != "Выполнена" and t["deadline"] and t["deadline"] < today)
+    return {"total": total, "open": open_, "done": done, "overdue": overdue}
+
+
 @routes.get("/")
 async def dashboard(request):
-    stats = get_stats()
     projects = get_projects()
     selected = request.rel_url.query.get("project", "")
     status_filter = request.rel_url.query.get("status", "")
 
     tasks = get_tasks(project=selected or None, status=status_filter or None)
+    
+    # Статистика считается по отфильтрованным задачам
+    stats = calc_stats(tasks)
 
     project_options = "".join(
         f'<option value="{p["name"]}" {"selected" if p["name"]==selected else ""}>{p["name"]}</option>'
@@ -70,6 +80,8 @@ async def dashboard(request):
     if not tasks:
         rows = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
 
+    title = f"Проект: {selected}" if selected else "Все проекты"
+
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -81,7 +93,7 @@ async def dashboard(request):
   body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
   .header {{ background: #1E293B; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 12px; }}
   .header h1 {{ font-size: 20px; font-weight: 700; }}
-  .header span {{ opacity: 0.5; font-size: 13px; }}
+  .header span {{ opacity: 0.6; font-size: 13px; }}
   .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 24px 32px; }}
   .stat {{ background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
   .stat .num {{ font-size: 32px; font-weight: 700; }}
@@ -99,7 +111,7 @@ async def dashboard(request):
 <div class="header">
   <div>
     <h1>📋 Task Dashboard</h1>
-    <span>Управление задачами</span>
+    <span>{title}</span>
   </div>
 </div>
 
