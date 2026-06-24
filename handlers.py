@@ -94,6 +94,7 @@ def edit_task_keyboard(task_id):
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📌 Изменить задачу", callback_data=f"etask_title_{task_id}")],
         [InlineKeyboardButton(text="👤 Изменить ответственного", callback_data=f"etask_assignee_{task_id}")],
+        [InlineKeyboardButton(text="🏢 Изменить отдел", callback_data=f"etask_department_{task_id}")],
         [InlineKeyboardButton(text="📅 Изменить срок", callback_data=f"etask_deadline_{task_id}")],
         [InlineKeyboardButton(text="📁 Изменить проект", callback_data=f"etask_project_{task_id}")],
         [InlineKeyboardButton(text="💬 Изменить комментарий", callback_data=f"etask_comment_{task_id}")],
@@ -498,6 +499,7 @@ async def etask_choose_field(callback: CallbackQuery, state: FSMContext):
     labels = {
         "title": "название задачи",
         "assignee": "ответственного",
+        "department": "отдел",
         "deadline": "срок (например: 30.06.2026)",
         "comment": "комментарий",
     }
