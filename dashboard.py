@@ -18,6 +18,13 @@ def task_row(t):
         "Выполнена": "#10B981",
     }.get(t["status"], "#6B7280")
     row_bg = "#FEE2E2" if overdue else "white"
+    
+    # Кнопки действий
+    if t['status'] == 'Выполнена':
+        action_btn = f'<a href="/reopen/{t["id"]}" style="background:#6B7280;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;">↩ Открыть</a>'
+    else:
+        action_btn = f'<a href="/done/{t["id"]}" style="background:#10B981;color:white;padding:4px 12px;border-radius:6px;font-size:12px;text-decoration:none;" onclick="return confirm(\'Отметить выполненной?\')">Выполнено</a>'
+
     return f"""
     <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
         <td style="padding:10px 12px; color:#6B7280; font-size:13px;">#{t['id']}</td>
@@ -32,11 +39,7 @@ def task_row(t):
             </span>
         </td>
         <td style="padding:10px 12px; color:#4B5563; font-size:13px;">{t['comment'] or '—'}</td>
-        <td style="padding:10px 12px;">
-            {"" if t['status']=='Выполнена' 
-             else f'<a href="/done/{t["id"]}" style="background:#10B981;color:white;padding:4px 12px;border-radius:6px;font-size:12px;text-decoration:none;" onclick="return confirm(\'Отметить выполненной?\')">✓ Выполнено</a>'}
-            {f'<a href="/reopen/{t["id"]}" style="background:#6B7280;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;margin-left:4px;">↩ Открыть</a>' if t['status']=='Выполнена' else ""}
-        </td>
+        <td style="padding:10px 12px;">{action_btn}</td>
     </tr>"""
 
 
@@ -135,14 +138,14 @@ async def mark_done(request):
     raise web.HTTPFound("/")
 
 
-def create_app():
-    app = web.Application()
-    app.add_routes(routes)
-    return app
-
-
 @routes.get("/reopen/{task_id}")
 async def reopen_task(request):
     task_id = int(request.match_info["task_id"])
     update_status(task_id, "Открыта")
     raise web.HTTPFound("/")
+
+
+def create_app():
+    app = web.Application()
+    app.add_routes(routes)
+    return app
