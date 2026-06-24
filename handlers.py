@@ -24,6 +24,8 @@ class TaskCreation(StatesGroup):
     confirming = State()
     confirming_multiple = State()
     correcting_field_multiple = State()
+    editing_one_of_multiple = State()
+    editing_one_field = State()
 
 
 class ProjectAdding(StatesGroup):
@@ -112,6 +114,25 @@ def mytask_keyboard(task_id):
     ])
 
 
+def edit_one_of_multiple_keyboard(task_idx):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📌 Изменить название", callback_data=f"eom_title_{task_idx}")],
+        [InlineKeyboardButton(text="👤 Изменить ответственного", callback_data=f"eom_assignee_{task_idx}")],
+        [InlineKeyboardButton(text="📅 Изменить срок", callback_data=f"eom_deadline_{task_idx}")],
+        [InlineKeyboardButton(text="✅ Готово", callback_data="eom_done")],
+    ])
+
+
+def format_one_of_multiple(task, idx, total):
+    return (
+        f"✏️ *Задача {idx+1} из {total}:*\n\n"
+        f"📌 *Название:* {task.get('title') or '—'}\n"
+        f"👤 *Ответственный:* {task.get('assignee') or '—'}\n"
+        f"📅 *Срок:* {task.get('deadline') or '—'}\n\n"
+        f"_Нажмите поле чтобы изменить или Готово._"
+    )
+
+
 def format_task_text(parsed):
     return (
         f"📋 *Проверьте задачу:*\n\n"
@@ -164,6 +185,7 @@ def format_multiple_preview(tasks, project, deadline, assignee):
 def multiple_confirm_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Сохранить все", callback_data="confirm_multiple")],
+        [InlineKeyboardButton(text="✏️ Редактировать задачи", callback_data="edit_tasks_list")],
         [InlineKeyboardButton(text="📁 Изменить проект", callback_data="correct_project")],
         [InlineKeyboardButton(text="📅 Изменить срок", callback_data="correct_deadline")],
         [InlineKeyboardButton(text="👤 Изменить ответственного", callback_data="correct_assignee")],
@@ -323,12 +345,10 @@ async def save_file(message: Message, state: FSMContext):
             (message.from_user.id,)
         ).fetchone()
     author = user["name"] if user else message.from_user.first_name or "Неизвестно"
-
     file_id = ""
     file_name = ""
     file_type = ""
     caption = message.caption or ""
-
     if message.document:
         file_id = message.document.file_id
         file_name = message.document.file_name or "файл"
@@ -344,7 +364,6 @@ async def save_file(message: Message, state: FSMContext):
     else:
         await message.answer("❌ Поддерживаются файлы, фото и видео.")
         return
-
     add_task_comment(task_id=task_id, author=author, text=caption, file_id=file_id, file_name=file_name, file_type=file_type)
     await state.clear()
     await message.answer(f"✅ Файл *{file_name}* прикреплён к задаче #{task_id}!", parse_mode="Markdown")
@@ -368,6 +387,74 @@ async def view_comments(callback: CallbackQuery):
             lines.append(f"💬 *{c['author']}* [{time}]: {c.get('text', '')}")
     await callback.message.answer("\n".join(lines), parse_mode="Markdown")
     await callback.answer()
+
+
+# ─── Редактирование задач ДО сохранения ───────────────────────────────────
+@router.callback_query(F.data == "edit_tasks_list", TaskCreation.confirming_multiple)
+async def edit_tasks_list(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    tasks = data["multiple_tasks"]
+    await state.update_data(editing_task_idx=0)
+    await state.set_state(TaskCreation.editing_one_of_multiple)
+    await callback.message.answer(
+        format_one_of_multiple(tasks[0], 0, len(tasks)),
+        reply_markup=edit_one_of_multiple_keyboard(0),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("eom_"), TaskCreation.editing_one_of_multiple)
+async def eom_choose_field(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    action = parts[1]
+    task_idx = int(parts[2]) if len(parts) > 2 else 0
+
+    if action == "done":
+        data = await state.get_data()
+        tasks = data["multiple_tasks"]
+        task_idx = data.get("editing_task_idx", 0)
+        next_idx = task_idx + 1
+        if next_idx < len(tasks):
+            await state.update_data(editing_task_idx=next_idx)
+            await callback.message.answer(
+                format_one_of_multiple(tasks[next_idx], next_idx, len(tasks)),
+                reply_markup=edit_one_of_multiple_keyboard(next_idx),
+                parse_mode="Markdown"
+            )
+        else:
+            await show_multiple_preview(callback, state)
+        await callback.answer()
+        return
+
+    await state.update_data(eom_field=action, editing_task_idx=task_idx)
+    await state.set_state(TaskCreation.editing_one_field)
+    labels = {
+        "title": "новое название задачи",
+        "assignee": "ответственного",
+        "deadline": "срок (например: 30.06.2026)",
+    }
+    await callback.message.answer(f"✏️ Введите {labels.get(action, action)}:")
+    await callback.answer()
+
+
+@router.message(TaskCreation.editing_one_field)
+async def eom_save_field(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get("eom_field")
+    task_idx = data.get("editing_task_idx", 0)
+    tasks = data["multiple_tasks"]
+    value = message.text.strip()
+    if field == "deadline":
+        value = await parse_deadline(value) or value
+    tasks[task_idx][field] = value
+    await state.update_data(multiple_tasks=tasks)
+    await state.set_state(TaskCreation.editing_one_of_multiple)
+    await message.answer(
+        format_one_of_multiple(tasks[task_idx], task_idx, len(tasks)),
+        reply_markup=edit_one_of_multiple_keyboard(task_idx),
+        parse_mode="Markdown"
+    )
 
 
 # ─── /edit ─────────────────────────────────────────────────────────────────
@@ -398,14 +485,12 @@ async def etask_choose_field(callback: CallbackQuery, state: FSMContext):
     field = parts[1]
     task_id = parts[2]
     await state.update_data(etask_field=field, editing_task_id=int(task_id))
-
     if field == "project":
         projects = get_projects()
         await state.set_state(TaskEditing.choosing_project)
         await callback.message.answer("📁 Выберите проект:", reply_markup=projects_keyboard_for_edit(projects, task_id))
         await callback.answer()
         return
-
     labels = {
         "title": "название задачи",
         "assignee": "ответственного",
@@ -472,12 +557,10 @@ async def process_task_text(message: Message, state: FSMContext):
     await message.answer("🤖 Анализирую...")
     today = datetime.now().strftime("%Y-%m-%d")
     result = await parse_task_with_ai(message.text, today)
-
     if not result:
         await message.answer("❌ Не удалось разобрать. Попробуйте /newtask заново.")
         await state.clear()
         return
-
     if result.get("is_multiple") and result.get("tasks"):
         tasks = result["tasks"]
         first = tasks[0] if tasks else {}
@@ -499,7 +582,6 @@ async def process_task_text(message: Message, state: FSMContext):
             await state.update_data(selected_project="Общие")
             await show_multiple_preview(message, state)
         return
-
     parsed = result
     await state.update_data(parsed=parsed)
     projects = get_projects()
@@ -516,25 +598,21 @@ async def process_task_text(message: Message, state: FSMContext):
 async def choose_project(callback: CallbackQuery, state: FSMContext):
     proj_data = callback.data.replace("proj_", "")
     data = await state.get_data()
-
     if proj_data == "new":
         await state.set_state(ProjectAdding.waiting_for_name)
         await callback.message.answer("📁 Введите название нового проекта:")
         await callback.answer()
         return
-
     projects = get_projects()
     try:
         project = projects[int(proj_data)]["name"]
     except (ValueError, IndexError):
         project = proj_data
-
     if data.get("multiple_tasks"):
         await state.update_data(selected_project=project)
         await show_multiple_preview(callback, state, edit=False)
         await callback.answer()
         return
-
     parsed = data.get("parsed", {})
     parsed["project"] = project
     await state.update_data(parsed=parsed)
