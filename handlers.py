@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
@@ -9,7 +9,8 @@ from aiogram.fsm.state import State, StatesGroup
 
 from agent import parse_task_with_ai, parse_deadline, analyze_project_tasks
 from database import (add_task, get_tasks, update_status, get_projects,
-                      add_project, get_overdue_tasks, get_stats)
+                      add_project, get_overdue_tasks, get_stats,
+                      register_user, get_user_by_name)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -40,6 +41,26 @@ FIELD_LABELS = {
     "deadline": "Срок (ГГГГ-ММ-ДД или текстом)",
     "description": "Комментарий",
 }
+
+
+async def notify_assignee(bot: Bot, assignee: str, title: str, project: str, deadline: str):
+    """Отправляет уведомление ответственному если он зарегистрирован."""
+    if not assignee:
+        return
+    user = get_user_by_name(assignee)
+    if user:
+        try:
+            await bot.send_message(
+                user["telegram_id"],
+                f"📌 *Вам назначена задача!*\n\n"
+                f"📋 *Задача:* {title}\n"
+                f"📁 *Проект:* {project}\n"
+                f"📅 *Срок:* {deadline or '—'}\n\n"
+                f"_Откройте дашборд для подробностей._",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления: {e}")
 
 
 def task_keyboard(parsed):
@@ -137,7 +158,8 @@ async def cmd_start(message: Message):
         "📁 /projects — список проектов\n"
         "🆕 /newproject — создать проект\n"
         "📥 /import — импорт из Google Sheets\n"
-        "🗑 /cleartasks — очистить все задачи"
+        "🗑 /cleartasks — очистить все задачи\n"
+        "👤 /register — зарегистрироваться для уведомлений"
     )
 
 
@@ -146,6 +168,26 @@ async def cmd_dashboard(message: Message):
     from config import RAILWAY_PUBLIC_DOMAIN
     url = f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else "http://localhost:8080"
     await message.answer(f"📊 [Открыть дашборд]({url})", parse_mode="Markdown")
+
+
+# ─── /register ─────────────────────────────────────────────────────────────
+@router.message(Command("register"))
+async def cmd_register(message: Message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer(
+            "👤 Введите своё имя после команды:\n"
+            "Например: `/register Турбина Е.`",
+            parse_mode="Markdown"
+        )
+        return
+    name = parts[1].strip()
+    register_user(message.from_user.id, name)
+    await message.answer(
+        f"✅ Вы зарегистрированы как *{name}*!\n\n"
+        f"Теперь вы будете получать уведомления когда вам назначают задачи.",
+        parse_mode="Markdown"
+    )
 
 
 # ─── /newtask ──────────────────────────────────────────────────────────────
@@ -279,14 +321,18 @@ async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
     assignee = data.get("selected_assignee", "")
     saved = 0
     for t in tasks:
+        final_assignee = assignee or t.get("assignee") or ""
+        final_deadline = deadline or t.get("deadline") or ""
+        title = t.get("title") or "Без названия"
         add_task(
             project=project,
-            assignee=assignee or t.get("assignee") or "",
+            assignee=final_assignee,
             department=t.get("department") or "",
-            title=t.get("title") or "Без названия",
-            deadline=deadline or t.get("deadline") or "",
+            title=title,
+            deadline=final_deadline,
             comment=t.get("description") or "",
         )
+        await notify_assignee(callback.bot, final_assignee, title, project, final_deadline)
         saved += 1
     await state.clear()
     await callback.message.edit_text(
@@ -333,14 +379,18 @@ async def confirm_task(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     p = data["parsed"]
     project = p.get("project") or "Общие"
+    assignee = p.get("assignee") or ""
+    deadline = p.get("deadline") or ""
+    title = p.get("title") or "Без названия"
     task_id = add_task(
         project=project,
-        assignee=p.get("assignee") or "",
+        assignee=assignee,
         department=p.get("department") or "",
-        title=p.get("title") or "Без названия",
-        deadline=p.get("deadline") or "",
+        title=title,
+        deadline=deadline,
         comment=p.get("description") or "",
     )
+    await notify_assignee(callback.bot, assignee, title, project, deadline)
     await state.clear()
     await callback.message.edit_text(
         f"✅ Задача #{task_id} добавлена в *{project}*!",
