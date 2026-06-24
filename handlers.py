@@ -75,11 +75,13 @@ def format_task_text(parsed):
 
 def format_multiple_preview(tasks, project, deadline, assignee):
     lines = [f"📋 *{len(tasks)} задач:*\n"]
-    for i, t in enumerate(tasks, 1):
+    for i, t in enumerate(tasks[:8], 1):
         title = t.get('title', '—')
-        if len(title) > 60:
-            title = title[:60] + "..."
+        if len(title) > 40:
+            title = title[:40] + "..."
         lines.append(f"*{i}.* {title}")
+    if len(tasks) > 8:
+        lines.append(f"_...и ещё {len(tasks) - 8}_")
     lines.append(f"\n📁 *Проект:* {project}")
     lines.append(f"📅 *Срок:* {deadline or '—'}")
     lines.append(f"👤 *Ответственный:* {assignee or '—'}")
@@ -110,11 +112,16 @@ async def show_multiple_preview(target, state, edit=False):
     deadline = data.get("selected_deadline", "")
     assignee = data.get("selected_assignee", "")
     text = format_multiple_preview(tasks, project, deadline, assignee)
+    if len(text) > 3000:
+        text = text[:3000] + "..."
     await state.set_state(TaskCreation.confirming_multiple)
     if edit:
         await target.message.edit_text(text, reply_markup=multiple_confirm_keyboard(), parse_mode="Markdown")
     else:
-        await target.answer(text, reply_markup=multiple_confirm_keyboard(), parse_mode="Markdown")
+        if hasattr(target, 'message'):
+            await target.message.answer(text, reply_markup=multiple_confirm_keyboard(), parse_mode="Markdown")
+        else:
+            await target.answer(text, reply_markup=multiple_confirm_keyboard(), parse_mode="Markdown")
 
 
 # ─── /start ────────────────────────────────────────────────────────────────
