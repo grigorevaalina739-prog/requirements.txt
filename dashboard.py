@@ -7,7 +7,6 @@ from datetime import datetime
 
 routes = web.RouteTableDef()
 
-# Цвета проектов — добавляйте свои проекты сюда
 PROJECT_COLORS = {
     "board miniso": {"bg": "#FEE2E2", "text": "#DC2626", "border": "#DC2626"},
     "сверка баз": {"bg": "#DBEAFE", "text": "#1D4ED8", "border": "#1D4ED8"},
@@ -18,7 +17,6 @@ def get_project_color(project_name):
     for k, v in PROJECT_COLORS.items():
         if k in key or key in k:
             return v
-    # Дефолтный цвет для остальных проектов
     return {"bg": "#F3F4F6", "text": "#374151", "border": "#6B7280"}
 
 
@@ -45,22 +43,22 @@ def task_row(t):
         comment_html = "—"
 
     pc = get_project_color(t["project"])
-    project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};border:1px solid {pc['border']}20;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;'>{t['project']}</span>"
+    project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};border:1px solid {pc['border']}40;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
 
     return f"""
     <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
-        <td style="padding:10px 12px; color:#6B7280; font-size:13px;">#{t['id']}</td>
-        <td style="padding:10px 12px; font-weight:500;">{t['title']}</td>
-        <td style="padding:10px 12px; color:#4B5563;">{t['assignee'] or '—'}</td>
-        <td style="padding:10px 12px; color:#4B5563;">{t['department'] or '—'}</td>
-        <td style="padding:10px 12px;">{project_badge}</td>
-        <td style="padding:10px 12px; color:#4B5563;">{t['deadline'] or '—'}</td>
-        <td style="padding:10px 12px;">
+        <td style="padding:10px 12px; color:#6B7280; font-size:13px; white-space:nowrap;">#{t['id']}</td>
+        <td style="padding:10px 12px; font-weight:500; min-width:220px;">{t['title']}</td>
+        <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['assignee'] or '—'}</td>
+        <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['department'] or '—'}</td>
+        <td style="padding:10px 12px; white-space:nowrap;">{project_badge}</td>
+        <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['deadline'] or '—'}</td>
+        <td style="padding:10px 12px; white-space:nowrap;">
             <span style="background:{status_color}20; color:{status_color}; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600;">
                 {t['status']}
             </span>
         </td>
-        <td style="padding:10px 12px; color:#4B5563; font-size:13px;">{comment_html}</td>
+        <td style="padding:10px 12px; color:#4B5563; font-size:13px; min-width:180px;">{comment_html}</td>
     </tr>"""
 
 
@@ -82,7 +80,6 @@ async def dashboard(request):
     tasks = get_tasks(project=selected or None, status=status_filter or None)
     stats = calc_stats(tasks)
 
-    # Кнопки проектов с цветами
     project_buttons = ""
     for p in projects:
         pc = get_project_color(p["name"])
@@ -100,13 +97,8 @@ async def dashboard(request):
             font-size:14px;
             font-weight:600;
             text-decoration:none;
-            transition:all 0.2s;
         ">{p['name']}</a>"""
 
-    project_options = "".join(
-        f'<option value="{p["name"]}" {"selected" if p["name"]==selected else ""}>{p["name"]}</option>'
-        for p in projects
-    )
     status_options = "".join(
         f'<option value="{s}" {"selected" if s==status_filter else ""}>{s}</option>'
         for s in ["Открыта", "В работе", "Выполнена"]
@@ -140,9 +132,9 @@ async def dashboard(request):
   .btn {{ padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none; }}
   .btn-clear {{ background: #6B7280; }}
   .table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
-  table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; }}
-  thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; }}
-  tr:hover {{ background: #F9FAFB !important; }}
+  table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
+  thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; white-space: nowrap; }}
+  tr:hover td {{ background: #F9FAFB; }}
 </style>
 </head>
 <body>
@@ -209,4 +201,3 @@ def create_app():
     app = web.Application()
     app.add_routes(routes)
     return app
-    
