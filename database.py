@@ -39,6 +39,16 @@ def init_db():
             name TEXT NOT NULL,
             created_at TEXT DEFAULT (date('now'))
         );
+        CREATE TABLE IF NOT EXISTS task_comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            author TEXT DEFAULT '',
+            text TEXT DEFAULT '',
+            file_id TEXT DEFAULT '',
+            file_name TEXT DEFAULT '',
+            file_type TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
         """)
     logger.info("База данных инициализирована.")
 
@@ -126,7 +136,6 @@ def register_user(telegram_id: int, name: str):
         return False
 
 def get_user_by_name(name: str):
-    """Ищет пользователя по имени (частичное совпадение)."""
     with get_conn() as conn:
         rows = conn.execute("SELECT * FROM users").fetchall()
         name_lower = name.lower()
@@ -138,3 +147,18 @@ def get_user_by_name(name: str):
 def get_all_users():
     with get_conn() as conn:
         return [dict(r) for r in conn.execute("SELECT * FROM users ORDER BY name").fetchall()]
+
+def add_task_comment(task_id: int, author: str, text: str = "", file_id: str = "", file_name: str = "", file_type: str = ""):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO task_comments (task_id, author, text, file_id, file_name, file_type) VALUES (?,?,?,?,?,?)",
+            (task_id, author, text, file_id, file_name, file_type)
+        )
+    return True
+
+def get_task_comments(task_id: int):
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM task_comments WHERE task_id=? ORDER BY created_at",
+            (task_id,)
+        ).fetchall()]
