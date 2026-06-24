@@ -33,6 +33,12 @@ def init_db():
             source_sheet TEXT DEFAULT '',
             source_id TEXT DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            telegram_id INTEGER UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            created_at TEXT DEFAULT (date('now'))
+        );
         """)
     logger.info("База данных инициализирована.")
 
@@ -106,3 +112,29 @@ def clear_tasks_from_sheet(spreadsheet_id: str):
     with get_conn() as conn:
         conn.execute("DELETE FROM tasks WHERE source_sheet=?", (spreadsheet_id,))
     return True
+
+def register_user(telegram_id: int, name: str):
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO users (telegram_id, name) VALUES (?,?)",
+                (telegram_id, name)
+            )
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка регистрации пользователя: {e}")
+        return False
+
+def get_user_by_name(name: str):
+    """Ищет пользователя по имени (частичное совпадение)."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM users").fetchall()
+        name_lower = name.lower()
+        for row in rows:
+            if name_lower in row["name"].lower() or row["name"].lower() in name_lower:
+                return dict(row)
+    return None
+
+def get_all_users():
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute("SELECT * FROM users ORDER BY name").fetchall()]
