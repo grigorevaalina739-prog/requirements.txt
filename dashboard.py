@@ -63,8 +63,6 @@ async def dashboard(request):
     status_filter = request.rel_url.query.get("status", "")
 
     tasks = get_tasks(project=selected or None, status=status_filter or None)
-    
-    # Статистика считается по отфильтрованным задачам
     stats = calc_stats(tasks)
 
     project_options = "".join(
@@ -99,7 +97,7 @@ async def dashboard(request):
   .stat .num {{ font-size: 32px; font-weight: 700; }}
   .stat .label {{ font-size: 13px; color: #6B7280; margin-top: 4px; }}
   .filters {{ padding: 0 32px 16px; display: flex; gap: 12px; align-items: center; }}
-  select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white; }}
+  select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white; cursor: pointer; }}
   .btn {{ padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none; }}
   .btn-clear {{ background: #6B7280; }}
   .table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
@@ -124,8 +122,12 @@ async def dashboard(request):
 
 <div class="filters">
   <form method="get" style="display:flex;gap:12px;align-items:center;">
-    <select name="project"><option value="">Все проекты</option>{project_options}</select>
-    <select name="status"><option value="">Все статусы</option>{status_options}</select>
+    <select name="project" onchange="this.form.submit()">
+      <option value="">Все проекты</option>{project_options}
+    </select>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Все статусы</option>{status_options}
+    </select>
     <button type="submit" class="btn">Фильтр</button>
     <a href="/" class="btn btn-clear">Сбросить</a>
   </form>
