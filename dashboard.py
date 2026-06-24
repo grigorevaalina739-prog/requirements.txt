@@ -19,7 +19,6 @@ def get_project_color(project_name):
             return v
     return {"bg": "#F3F4F6", "text": "#374151", "border": "#6B7280"}
 
-
 def task_row(t):
     today = datetime.now().strftime("%Y-%m-%d")
     overdue = t["deadline"] and t["deadline"] < today and t["status"] != "Выполнена"
@@ -46,21 +45,20 @@ def task_row(t):
     project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};border:1px solid {pc['border']}40;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
 
     return f"""
-    <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
-        <td style="padding:10px 12px; color:#6B7280; font-size:13px; white-space:nowrap;">#{t['id']}</td>
-        <td style="padding:10px 12px; font-weight:500; min-width:220px;">{t['title']}</td>
-        <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['assignee'] or '—'}</td>
-        <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['department'] or '—'}</td>
-        <td style="padding:10px 12px; white-space:nowrap;">{project_badge}</td>
-        <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['deadline'] or '—'}</td>
-        <td style="padding:10px 12px; white-space:nowrap;">
-            <span style="background:{status_color}20; color:{status_color}; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600;">
-                {t['status']}
-            </span>
-        </td>
-        <td style="padding:10px 12px; color:#4B5563; font-size:13px; min-width:180px;">{comment_html}</td>
-    </tr>"""
-
+<tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
+    <td style="padding:10px 12px; color:#6B7280; font-size:13px; white-space:nowrap;">#{t['id']}</td>
+    <td style="padding:10px 12px; font-weight:500; min-width:220px;">{t['title']}</td>
+    <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['assignee'] or '—'}</td>
+    <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['department'] or '—'}</td>
+    <td style="padding:10px 12px; white-space:nowrap;">{project_badge}</td>
+    <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['deadline'] or '—'}</td>
+    <td style="padding:10px 12px; white-space:nowrap;">
+        <span style="background:{status_color}20; color:{status_color}; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600;">
+            {t['status']}
+        </span>
+    </td>
+    <td style="padding:10px 12px; color:#4B5563; font-size:13px; min-width:180px;">{comment_html}</td>
+</tr>"""
 
 def calc_stats(tasks):
     today = datetime.now().strftime("%Y-%m-%d")
@@ -68,8 +66,8 @@ def calc_stats(tasks):
     open_ = sum(1 for t in tasks if t["status"] == "Открыта")
     done = sum(1 for t in tasks if t["status"] == "Выполнена")
     overdue = sum(1 for t in tasks if t["status"] != "Выполнена" and t["deadline"] and t["deadline"] < today)
-    return {"total": total, "open": open_, "done": done, "overdue": overdue}
-
+    percent = round((done / total * 100) if total > 0 else 0)
+    return {"total": total, "open": open_, "done": done, "overdue": overdue, "percent": percent}
 
 @routes.get("/")
 async def dashboard(request):
@@ -87,17 +85,17 @@ async def dashboard(request):
         border = f"3px solid {pc['border']}" if is_active else f"2px solid {pc['border']}40"
         bg = pc["bg"] if is_active else "white"
         project_buttons += f"""
-        <a href="/?project={p['name']}" style="
-            display:inline-block;
-            padding:8px 16px;
-            background:{bg};
-            color:{pc['text']};
-            border:{border};
-            border-radius:8px;
-            font-size:14px;
-            font-weight:600;
-            text-decoration:none;
-        ">{p['name']}</a>"""
+<a href="/?project={p['name']}" style="
+    display:inline-block;
+    padding:8px 16px;
+    background:{bg};
+    color:{pc['text']};
+    border:{border};
+    border-radius:8px;
+    font-size:14px;
+    font-weight:600;
+    text-decoration:none;
+">{p['name']}</a>"""
 
     status_options = "".join(
         f'<option value="{s}" {"selected" if s==status_filter else ""}>{s}</option>'
@@ -110,6 +108,8 @@ async def dashboard(request):
 
     title = f"Проект: {selected}" if selected else "Все проекты"
 
+    progress_color = "#10B981" if stats['percent'] == 100 else "#3B82F6"
+
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -117,71 +117,91 @@ async def dashboard(request):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Task Dashboard</title>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
-  .header {{ background: #1E293B; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 12px; }}
-  .header h1 {{ font-size: 20px; font-weight: 700; }}
-  .header span {{ opacity: 0.6; font-size: 13px; }}
-  .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 24px 32px; }}
-  .stat {{ background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
-  .stat .num {{ font-size: 32px; font-weight: 700; }}
-  .stat .label {{ font-size: 13px; color: #6B7280; margin-top: 4px; }}
-  .project-bar {{ padding: 0 32px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }}
-  .filters {{ padding: 0 32px 16px; display: flex; gap: 12px; align-items: center; }}
-  select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white; cursor: pointer; }}
-  .btn {{ padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none; }}
-  .btn-clear {{ background: #6B7280; }}
-  .table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
-  table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
-  thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; white-space: nowrap; }}
-  tr:hover td {{ background: #F9FAFB; }}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
+.header {{ background: #1E293B; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 12px; }}
+.header h1 {{ font-size: 20px; font-weight: 700; }}
+.header span {{ opacity: 0.6; font-size: 13px; }}
+.stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 24px 32px; }}
+.stat {{ background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
+.stat .num {{ font-size: 32px; font-weight: 700; }}
+.stat .label {{ font-size: 13px; color: #6B7280; margin-top: 4px; }}
+.progress-section {{ padding: 0 32px 24px; }}
+.progress-card {{ background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
+.progress-title {{ font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; }}
+.progress-bar-wrap {{ display: flex; align-items: center; gap: 12px; }}
+.progress-bar-bg {{ flex: 1; background: #E5E7EB; border-radius: 999px; height: 14px; overflow: hidden; }}
+.progress-bar-fill {{ height: 100%; border-radius: 999px; transition: width .4s ease; }}
+.progress-percent {{ font-size: 18px; font-weight: 700; color: #111827; min-width: 52px; text-align: right; }}
+.progress-sub {{ font-size: 12px; color: #6B7280; margin-top: 8px; }}
+.project-bar {{ padding: 0 32px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }}
+.filters {{ padding: 0 32px 16px; display: flex; gap: 12px; align-items: center; }}
+select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white; cursor: pointer; }}
+.btn {{ padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none; }}
+.btn-clear {{ background: #6B7280; }}
+.table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
+table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
+thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; white-space: nowrap; }}
+tr:hover td {{ background: #F9FAFB; }}
 </style>
 </head>
 <body>
 <div class="header">
-  <div>
-    <h1>📋 Task Dashboard</h1>
-    <span>{title}</span>
-  </div>
+    <div>
+        <h1>📋 Task Dashboard</h1>
+        <span>{title}</span>
+    </div>
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="num" style="color:#1E293B">{stats['total']}</div><div class="label">Всего задач</div></div>
-  <div class="stat"><div class="num" style="color:#3B82F6">{stats['open']}</div><div class="label">Открытых</div></div>
-  <div class="stat"><div class="num" style="color:#10B981">{stats['done']}</div><div class="label">Выполненных</div></div>
-  <div class="stat"><div class="num" style="color:#EF4444">{stats['overdue']}</div><div class="label">Просроченных 🔴</div></div>
+    <div class="stat"><div class="num" style="color:#1E293B">{stats['total']}</div><div class="label">Всего задач</div></div>
+    <div class="stat"><div class="num" style="color:#3B82F6">{stats['open']}</div><div class="label">Открытых</div></div>
+    <div class="stat"><div class="num" style="color:#10B981">{stats['done']}</div><div class="label">Выполненных</div></div>
+    <div class="stat"><div class="num" style="color:#EF4444">{stats['overdue']}</div><div class="label">Просроченных 🔴</div></div>
+</div>
+
+<div class="progress-section">
+    <div class="progress-card">
+        <div class="progress-title">📊 Прогресс проекта</div>
+        <div class="progress-bar-wrap">
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill" style="width:{stats['percent']}%; background:{progress_color};"></div>
+            </div>
+            <div class="progress-percent">{stats['percent']}%</div>
+        </div>
+        <div class="progress-sub">Выполнено {stats['done']} из {stats['total']} задач</div>
+    </div>
 </div>
 
 <div class="project-bar">
-  <a href="/" style="display:inline-block;padding:8px 16px;background:{'#1E293B' if not selected else 'white'};color:{'white' if not selected else '#6B7280'};border:2px solid {'#1E293B' if not selected else '#E5E7EB'};border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;">Все проекты</a>
-  {project_buttons}
+    <a href="/" style="display:inline-block;padding:8px 16px;background:{'#1E293B' if not selected else 'white'};color:{'white' if not selected else '#6B7280'};border:2px solid {'#1E293B' if not selected else '#E5E7EB'};border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;">Все проекты</a>
+    {project_buttons}
 </div>
 
 <div class="filters">
-  <form method="get" style="display:flex;gap:12px;align-items:center;">
-    <input type="hidden" name="project" value="{selected}">
-    <select name="status" onchange="this.form.submit()">
-      <option value="">Все статусы</option>{status_options}
-    </select>
-    <a href="/" class="btn btn-clear">Сбросить</a>
-  </form>
+    <form method="get" style="display:flex;gap:12px;align-items:center;">
+        <input type="hidden" name="project" value="{selected}">
+        <select name="status" onchange="this.form.submit()">
+            <option value="">Все статусы</option>{status_options}
+        </select>
+        <a href="/" class="btn btn-clear">Сбросить</a>
+    </form>
 </div>
 
 <div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>Задача</th><th>Ответственный</th><th>Отдел</th>
-        <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий сотрудника</th>
-      </tr>
-    </thead>
-    <tbody>{rows}</tbody>
-  </table>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th><th>Задача</th><th>Ответственный</th><th>Отдел</th>
+                <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий сотрудника</th>
+            </tr>
+        </thead>
+        <tbody>{rows}</tbody>
+    </table>
 </div>
 </body>
 </html>"""
     return web.Response(text=html, content_type="text/html")
-
 
 @routes.get("/done/{task_id}")
 async def mark_done(request):
@@ -189,13 +209,11 @@ async def mark_done(request):
     update_status(task_id, "Выполнена")
     raise web.HTTPFound("/")
 
-
 @routes.get("/reopen/{task_id}")
 async def reopen_task(request):
     task_id = int(request.match_info["task_id"])
     update_status(task_id, "Открыта")
     raise web.HTTPFound("/")
-
 
 def create_app():
     app = web.Application()
