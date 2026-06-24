@@ -228,6 +228,7 @@ async def cmd_start(message: Message):
         "👋 Привет! Я агент управления задачами.\n\n"
         "➕ /newtask — создать задачу\n"
         "✏️ /edit <ID> — редактировать задачу\n"
+        "✏️ /editall — редактировать все задачи\n"
         "🗑 /delete <ID> — удалить задачу\n"
         "📋 /mytasks — мои задачи\n"
         "📊 /dashboard — дашборд\n"
@@ -451,6 +452,67 @@ async def eom_save_field(message: Message, state: FSMContext):
         reply_markup=edit_one_of_multiple_keyboard(task_idx),
         parse_mode="Markdown"
     )
+
+
+# ─── /editall ─────────────────────────────────────────────────────────────
+@router.message(Command("editall"))
+async def cmd_editall(message: Message, state: FSMContext):
+    projects = get_projects()
+    if not projects:
+        await message.answer("📋 Задач нет. /newtask")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"editall_{i}")] for i, p in enumerate(projects)
+    ])
+    await message.answer("📁 Выберите проект для редактирования:", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("editall_"))
+async def editall_choose_project(callback: CallbackQuery, state: FSMContext):
+    idx = int(callback.data.replace("editall_", ""))
+    projects = get_projects()
+    try:
+        project = projects[idx]["name"]
+    except IndexError:
+        await callback.answer()
+        return
+    tasks = get_tasks(project=project)
+    if not tasks:
+        await callback.message.answer(f"📋 В *{project}* задач нет.", parse_mode="Markdown")
+        await callback.answer()
+        return
+    await callback.message.answer(f"✏️ *Задачи проекта {project}:*\n\nНажмите на задачу чтобы редактировать:", parse_mode="Markdown")
+    for t in tasks[:20]:
+        emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢"}.get(t.get("status", ""), "⚪")
+        title = t['title'][:50] + "..." if len(t['title']) > 50 else t['title']
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"quickedit_{t['id']}")]
+        ])
+        await callback.message.answer(
+            f"{emoji} *#{t['id']}* {title}\n👤 {t['assignee'] or '—'} | 📅 {t['deadline'] or '—'}",
+            reply_markup=kb,
+            parse_mode="Markdown"
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("quickedit_"))
+async def quickedit_task(callback: CallbackQuery, state: FSMContext):
+    task_id = int(callback.data.replace("quickedit_", ""))
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        await callback.message.answer(f"❌ Задача #{task_id} не найдена.")
+        await callback.answer()
+        return
+    await state.update_data(editing_task_id=task_id)
+    await state.set_state(TaskEditing.choosing_field)
+    await callback.message.answer(
+        format_existing_task(task),
+        reply_markup=edit_task_keyboard(task_id),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
 
 
 # ─── /edit ─────────────────────────────────────────────────────────────────
@@ -802,11 +864,18 @@ async def show_project_tasks(callback: CallbackQuery):
         await callback.message.answer(f"📋 В *{project}* задач нет.", parse_mode="Markdown")
         await callback.answer()
         return
-    lines = [f"📁 *{project}:*\n"]
+    await callback.message.answer(f"📁 *{project}:*", parse_mode="Markdown")
     for t in tasks[:15]:
         emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢"}.get(t.get("status", ""), "⚪")
-        lines.append(f"{emoji} [{t['id']}] *{t['title']}*\n   👤 {t['assignee'] or '—'} | 📅 {t['deadline'] or '—'}")
-    await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+        title = t['title'][:50] + "..." if len(t['title']) > 50 else t['title']
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"quickedit_{t['id']}")]
+        ])
+        await callback.message.answer(
+            f"{emoji} *#{t['id']}* {title}\n👤 {t['assignee'] or '—'} | 📅 {t['deadline'] or '—'}",
+            reply_markup=kb,
+            parse_mode="Markdown"
+        )
     await callback.answer()
 
 
