@@ -385,4 +385,515 @@ async def view_comments(callback: CallbackQuery):
         if c.get("file_id"):
             lines.append(f"📎 *{c['author']}* [{time}]: {c['file_name']} {c.get('text', '')}")
         else:
-            lines.append(f"💬 *{c['author']}* [{time}]:
+            lines.append(f"💬 *{c['author']}* [{time}]: {c.get('text', '')}")
+    await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+    await callback.answer()
+
+
+# ─── Редактирование задач ДО сохранения ───────────────────────────────────
+@router.callback_query(F.data == "edit_tasks_list", TaskCreation.confirming_multiple)
+async def edit_tasks_list(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    tasks = data["multiple_tasks"]
+    await state.update_data(editing_task_idx=0)
+    await state.set_state(TaskCreation.editing_one_of_multiple)
+    await callback.message.answer(
+        format_one_of_multiple(tasks[0], 0, len(tasks)),
+        reply_markup=edit_one_of_multiple_keyboard(0),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("eom_"), TaskCreation.editing_one_of_multiple)
+async def eom_choose_field(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    action = parts[1]
+
+    data = await state.get_data()
+    tasks = data["multiple_tasks"]
+    task_idx = data.get("editing_task_idx", 0)
+
+    if action == "done":
+        next_idx = task_idx + 1
+        if next_idx < len(tasks):
+            await state.update_data(editing_task_idx=next_idx)
+            await callback.message.answer(
+                format_one_of_multiple(tasks[next_idx], next_idx, len(tasks)),
+                reply_markup=edit_one_of_multiple_keyboard(next_idx),
+                parse_mode="Markdown"
+            )
+        else:
+            await show_multiple_preview(callback, state)
+        await callback.answer()
+        return
+
+    await state.update_data(eom_field=action, editing_task_idx=task_idx)
+    await state.set_state(TaskCreation.editing_one_field)
+    labels = {
+        "title": "новое название задачи",
+        "assignee": "ответственного",
+        "deadline": "срок (например: 30.06.2026)",
+    }
+    await callback.message.answer(f"✏️ Введите {labels.get(action, action)}:")
+    await callback.answer()
+
+
+@router.message(TaskCreation.editing_one_field)
+async def eom_save_field(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get("eom_field")
+    task_idx = data.get("editing_task_idx", 0)
+    tasks = data["multiple_tasks"]
+    value = message.text.strip()
+    if field == "deadline":
+        value = await parse_deadline(value) or value
+    tasks[task_idx][field] = value
+    await state.update_data(multiple_tasks=tasks)
+    await state.set_state(TaskCreation.editing_one_of_multiple)
+    await message.answer(
+        format_one_of_multiple(tasks[task_idx], task_idx, len(tasks)),
+        reply_markup=edit_one_of_multiple_keyboard(task_idx),
+        parse_mode="Markdown"
+    )
+
+
+# ─── /edit ─────────────────────────────────────────────────────────────────
+@router.message(Command("edit"))
+async def cmd_edit(message: Message, state: FSMContext):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("Укажите ID задачи: /edit 5")
+        return
+    task_id = int(parts[1])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        await message.answer(f"❌ Задача #{task_id} не найдена.")
+        return
+    await state.update_data(editing_task_id=task_id)
+    await state.set_state(TaskEditing.choosing_field)
+    await message.answer(
+        format_existing_task(task),
+        reply_markup=edit_task_keyboard(task_id),
+        parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data.startswith("etask_"), TaskEditing.choosing_field)
+async def etask_choose_field(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    field = parts[1]
+    task_id = parts[2]
+
+    if field == "delete":
+        with get_conn() as conn:
+            conn.execute("DELETE FROM tasks WHERE id=?", (int(task_id),))
+        await state.clear()
+        await callback.message.edit_text(f"🗑 Задача #{task_id} удалена!")
+        await callback.answer()
+        return
+
+    await state.update_data(etask_field=field, editing_task_id=int(task_id))
+    if field == "project":
+        projects = get_projects()
+        await state.set_state(TaskEditing.choosing_project)
+        await callback.message.answer("📁 Выберите проект:", reply_markup=projects_keyboard_for_edit(projects, task_id))
+        await callback.answer()
+        return
+    labels = {
+        "title": "название задачи",
+        "assignee": "ответственного",
+        "deadline": "срок (например: 30.06.2026)",
+        "comment": "комментарий",
+    }
+    await state.set_state(TaskEditing.editing_field)
+    await callback.message.answer(f"✏️ Введите новый {labels.get(field, field)}:")
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("eproj_"), TaskEditing.choosing_project)
+async def etask_choose_project(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    proj_idx = int(parts[1])
+    task_id = int(parts[2])
+    projects = get_projects()
+    try:
+        project = projects[proj_idx]["name"]
+    except IndexError:
+        project = ""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET project=? WHERE id=?", (project, task_id))
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    await state.set_state(TaskEditing.choosing_field)
+    await callback.message.answer(
+        format_existing_task(task),
+        reply_markup=edit_task_keyboard(task_id),
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.message(TaskEditing.editing_field)
+async def etask_save_field(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get("etask_field")
+    task_id = data.get("editing_task_id")
+    value = message.text.strip()
+    if field == "deadline":
+        value = await parse_deadline(value) or value
+    with get_conn() as conn:
+        conn.execute(f"UPDATE tasks SET {field}=? WHERE id=?", (value, task_id))
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    await state.set_state(TaskEditing.choosing_field)
+    await message.answer(
+        format_existing_task(task),
+        reply_markup=edit_task_keyboard(task_id),
+        parse_mode="Markdown"
+    )
+
+
+# ─── /delete ───────────────────────────────────────────────────────────────
+@router.message(Command("delete"))
+async def cmd_delete(message: Message):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("Укажите ID задачи: /delete 5")
+        return
+    task_id = int(parts[1])
+    with get_conn() as conn:
+        result = conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    if result.rowcount > 0:
+        await message.answer(f"🗑 Задача #{task_id} удалена!")
+    else:
+        await message.answer(f"❌ Задача #{task_id} не найдена.")
+
+
+# ─── /newtask ──────────────────────────────────────────────────────────────
+@router.message(Command("newtask"))
+async def cmd_newtask(message: Message, state: FSMContext):
+    await state.set_state(TaskCreation.waiting_for_text)
+    await message.answer("📝 Опишите задачу или список задач — AI разберёт автоматически.")
+
+
+@router.message(TaskCreation.waiting_for_text)
+async def process_task_text(message: Message, state: FSMContext):
+    await message.answer("🤖 Анализирую...")
+    today = datetime.now().strftime("%Y-%m-%d")
+    result = await parse_task_with_ai(message.text, today)
+    if not result:
+        await message.answer("❌ Не удалось разобрать. Попробуйте /newtask заново.")
+        await state.clear()
+        return
+    if result.get("is_multiple") and result.get("tasks"):
+        tasks = result["tasks"]
+        first = tasks[0] if tasks else {}
+        await state.update_data(
+            multiple_tasks=tasks,
+            selected_project="",
+            selected_deadline=first.get("deadline", ""),
+            selected_assignee=first.get("assignee", "")
+        )
+        projects = get_projects()
+        if projects:
+            await state.set_state(TaskCreation.choosing_project)
+            await message.answer(
+                f"📋 Найдено *{len(tasks)} задач*. В какой проект добавить?",
+                reply_markup=projects_keyboard(projects),
+                parse_mode="Markdown"
+            )
+        else:
+            await state.update_data(selected_project="Общие")
+            await show_multiple_preview(message, state)
+        return
+    parsed = result
+    await state.update_data(parsed=parsed)
+    projects = get_projects()
+    if not parsed.get("project") and projects:
+        await state.set_state(TaskCreation.choosing_project)
+        await message.answer("📁 В какой проект добавить?", reply_markup=projects_keyboard(projects))
+    else:
+        await state.set_state(TaskCreation.confirming)
+        await message.answer(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
+
+
+# ─── Выбор проекта ─────────────────────────────────────────────────────────
+@router.callback_query(F.data.startswith("proj_"), TaskCreation.choosing_project)
+async def choose_project(callback: CallbackQuery, state: FSMContext):
+    proj_data = callback.data.replace("proj_", "")
+    data = await state.get_data()
+    if proj_data == "new":
+        await state.set_state(ProjectAdding.waiting_for_name)
+        await callback.message.answer("📁 Введите название нового проекта:")
+        await callback.answer()
+        return
+    projects = get_projects()
+    try:
+        project = projects[int(proj_data)]["name"]
+    except (ValueError, IndexError):
+        project = proj_data
+    if data.get("multiple_tasks"):
+        await state.update_data(selected_project=project)
+        await show_multiple_preview(callback, state, edit=False)
+        await callback.answer()
+        return
+    parsed = data.get("parsed", {})
+    parsed["project"] = project
+    await state.update_data(parsed=parsed)
+    await state.set_state(TaskCreation.confirming)
+    await callback.message.answer(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
+    await callback.answer()
+
+
+# ─── Кнопки изменения ──────────────────────────────────────────────────────
+@router.callback_query(F.data == "correct_project", TaskCreation.confirming_multiple)
+async def correct_project(callback: CallbackQuery, state: FSMContext):
+    projects = get_projects()
+    await state.set_state(TaskCreation.choosing_project)
+    await callback.message.answer("📁 Выберите проект:", reply_markup=projects_keyboard(projects))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "correct_deadline", TaskCreation.confirming_multiple)
+async def correct_deadline(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(correcting="deadline")
+    await state.set_state(TaskCreation.correcting_field_multiple)
+    await callback.message.answer("📅 Введите срок (например: 30.06.2026):")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "correct_assignee", TaskCreation.confirming_multiple)
+async def correct_assignee(callback: CallbackQuery, state: FSMContext):
+    await state.update_data(correcting="assignee")
+    await state.set_state(TaskCreation.correcting_field_multiple)
+    await callback.message.answer("👤 Введите ответственного:")
+    await callback.answer()
+
+
+@router.message(TaskCreation.correcting_field_multiple)
+async def apply_correction(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get("correcting")
+    value = message.text.strip()
+    if field == "deadline":
+        value = await parse_deadline(value) or value
+        await state.update_data(selected_deadline=value)
+    elif field == "assignee":
+        await state.update_data(selected_assignee=value)
+    await show_multiple_preview(message, state)
+
+
+# ─── Сохранение нескольких задач ───────────────────────────────────────────
+@router.callback_query(F.data == "confirm_multiple", TaskCreation.confirming_multiple)
+async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    tasks = data["multiple_tasks"]
+    project = data.get("selected_project", "Общие")
+    deadline = data.get("selected_deadline", "")
+    assignee = data.get("selected_assignee", "")
+    saved = 0
+    for t in tasks:
+        final_assignee = assignee or t.get("assignee") or ""
+        final_deadline = deadline or t.get("deadline") or ""
+        title = t.get("title") or "Без названия"
+        add_task(
+            project=project,
+            assignee=final_assignee,
+            department=t.get("department") or "",
+            title=title,
+            deadline=final_deadline,
+            comment=t.get("description") or "",
+        )
+        await notify_assignee(callback.bot, final_assignee, title, project, final_deadline)
+        saved += 1
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ Сохранено *{saved} задач* в проект *{project}*!",
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+# ─── Редактирование одной задачи (при создании) ───────────────────────────
+@router.callback_query(F.data.startswith("edit_"), TaskCreation.confirming)
+async def edit_field(callback: CallbackQuery, state: FSMContext):
+    field = callback.data.replace("edit_", "")
+    if field == "project":
+        projects = get_projects()
+        await state.update_data(editing=field)
+        await state.set_state(TaskCreation.choosing_project)
+        await callback.message.answer("📁 Выберите проект:", reply_markup=projects_keyboard(projects))
+        await callback.answer()
+        return
+    await state.update_data(editing=field)
+    await state.set_state(TaskCreation.editing_field)
+    await callback.message.answer(f"✏️ Введите *{FIELD_LABELS.get(field, field)}*:", parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.message(TaskCreation.editing_field)
+async def save_edited_field(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get("editing")
+    parsed = data.get("parsed", {})
+    value = message.text.strip()
+    if field == "deadline" and value not in ("", "—"):
+        parsed[field] = await parse_deadline(value) or value
+    else:
+        parsed[field] = "" if value == "—" else value
+    await state.update_data(parsed=parsed)
+    await state.set_state(TaskCreation.confirming)
+    await message.answer(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
+
+
+@router.callback_query(F.data == "confirm_task", TaskCreation.confirming)
+async def confirm_task(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    p = data["parsed"]
+    project = p.get("project") or "Общие"
+    assignee = p.get("assignee") or ""
+    deadline = p.get("deadline") or ""
+    title = p.get("title") or "Без названия"
+    task_id = add_task(
+        project=project,
+        assignee=assignee,
+        department=p.get("department") or "",
+        title=title,
+        deadline=deadline,
+        comment=p.get("description") or "",
+    )
+    await notify_assignee(callback.bot, assignee, title, project, deadline)
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ Задача #{task_id} добавлена в *{project}*!",
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "cancel_task")
+async def cancel_task(callback: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await callback.message.edit_text("❌ Отменено.")
+    await callback.answer()
+
+
+# ─── /tasks ────────────────────────────────────────────────────────────────
+@router.message(Command("tasks"))
+async def cmd_tasks(message: Message):
+    projects = get_projects()
+    if not projects:
+        await message.answer("📋 Задач нет. /newtask")
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"show_{i}")] for i, p in enumerate(projects)
+    ])
+    await message.answer("📋 Выберите проект:", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("show_"))
+async def show_project_tasks(callback: CallbackQuery):
+    idx = callback.data.replace("show_", "")
+    projects = get_projects()
+    try:
+        project = projects[int(idx)]["name"]
+    except (ValueError, IndexError):
+        project = idx
+    tasks = get_tasks(project=project)
+    if not tasks:
+        await callback.message.answer(f"📋 В *{project}* задач нет.", parse_mode="Markdown")
+        await callback.answer()
+        return
+    lines = [f"📁 *{project}:*\n"]
+    for t in tasks[:15]:
+        emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢"}.get(t.get("status", ""), "⚪")
+        lines.append(f"{emoji} [{t['id']}] *{t['title']}*\n   👤 {t['assignee'] or '—'} | 📅 {t['deadline'] or '—'}")
+    await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+    await callback.answer()
+
+
+# ─── /done ─────────────────────────────────────────────────────────────────
+@router.message(Command("done"))
+async def cmd_done(message: Message):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("Укажите ID: /done 5")
+        return
+    update_status(int(parts[1]), "Выполнена")
+    await message.answer(f"✅ Задача #{parts[1]} выполнена!")
+
+
+# ─── /overdue ──────────────────────────────────────────────────────────────
+@router.message(Command("overdue"))
+async def cmd_overdue(message: Message):
+    tasks = get_overdue_tasks()
+    if not tasks:
+        await message.answer("🎉 Просроченных задач нет!")
+        return
+    lines = ["⚠️ *Просроченные задачи:*\n"]
+    for t in tasks:
+        lines.append(f"🔴 [{t['id']}] *{t['title']}*\n   📁 {t['project']} | 👤 {t['assignee'] or '—'} | 📅 {t['deadline']}")
+    await message.answer("\n".join(lines), parse_mode="Markdown")
+
+
+# ─── /projects ─────────────────────────────────────────────────────────────
+@router.message(Command("projects"))
+async def cmd_projects(message: Message):
+    projects = get_projects()
+    if not projects:
+        await message.answer("📁 Проектов нет. /newproject")
+        return
+    stats = get_stats()
+    by_proj = {p["project"]: p["cnt"] for p in stats["by_project"]}
+    lines = ["📁 *Проекты:*\n"]
+    for p in projects:
+        cnt = by_proj.get(p["name"], 0)
+        lines.append(f"• *{p['name']}* — {cnt} задач")
+    await message.answer("\n".join(lines), parse_mode="Markdown")
+
+
+# ─── /newproject ───────────────────────────────────────────────────────────
+@router.message(Command("newproject"))
+async def cmd_newproject(message: Message, state: FSMContext):
+    await state.set_state(ProjectAdding.waiting_for_name)
+    await message.answer("📁 Введите название проекта:")
+
+
+@router.message(ProjectAdding.waiting_for_name)
+async def process_project_name(message: Message, state: FSMContext):
+    name = message.text.strip()
+    add_project(name)
+    await state.clear()
+    await message.answer(f"✅ Проект *{name}* создан!", parse_mode="Markdown")
+
+
+# ─── /import ───────────────────────────────────────────────────────────────
+@router.message(Command("import"))
+async def cmd_import(message: Message, state: FSMContext):
+    await state.set_state(ImportAdding.waiting_for_url)
+    await message.answer("🔗 Вставьте ссылку на Google таблицу для импорта:")
+
+
+@router.message(ImportAdding.waiting_for_url)
+async def import_url(message: Message, state: FSMContext):
+    url = message.text.strip()
+    try:
+        spreadsheet_id = url.split("/d/")[1].split("/")[0]
+    except IndexError:
+        await message.answer("❌ Неверная ссылка.")
+        return
+    await state.clear()
+    await message.answer("⏳ Импортирую задачи из всех листов...", parse_mode="Markdown")
+    from importer import import_from_sheet
+    result = import_from_sheet(spreadsheet_id, "")
+    if result["success"]:
+        await message.answer(
+            f"✅ Импорт завершён!\n\n"
+            f"📥 Добавлено: *{result['imported']}* задач\n"
+            f"⏭ Пропущено: *{result['skipped']}*",
+            parse_mode="Markdown"
+        )
+    else:
+        await message.answer(f"❌ Ошибка: {result['error']}")
