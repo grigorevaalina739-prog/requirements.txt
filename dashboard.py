@@ -18,12 +18,6 @@ def task_row(t):
         "Выполнена": "#10B981",
     }.get(t["status"], "#6B7280")
     row_bg = "#FEE2E2" if overdue else "white"
-    
-    # Кнопки действий
-    if t['status'] == 'Выполнена':
-        action_btn = f'<a href="/reopen/{t["id"]}" style="background:#6B7280;color:white;padding:4px 8px;border-radius:6px;font-size:12px;text-decoration:none;">↩ Открыть</a>'
-    else:
-        action_btn = f'<a href="/done/{t["id"]}" style="background:#10B981;color:white;padding:4px 12px;border-radius:6px;font-size:12px;text-decoration:none;" onclick="return confirm(\'Отметить выполненной?\')">Выполнено</a>'
 
     return f"""
     <tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
@@ -39,7 +33,6 @@ def task_row(t):
             </span>
         </td>
         <td style="padding:10px 12px; color:#4B5563; font-size:13px;">{t['comment'] or '—'}</td>
-        <td style="padding:10px 12px;">{action_btn}</td>
     </tr>"""
 
 
@@ -63,7 +56,7 @@ async def dashboard(request):
     rows = "".join(task_row(t) for t in tasks)
 
     if not tasks:
-        rows = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
+        rows = '<tr><td colspan="8" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
 
     html = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -120,7 +113,7 @@ async def dashboard(request):
     <thead>
       <tr>
         <th>ID</th><th>Задача</th><th>Ответственный</th><th>Отдел</th>
-        <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий</th><th></th>
+        <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий</th>
       </tr>
     </thead>
     <tbody>{rows}</tbody>
