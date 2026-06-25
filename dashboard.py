@@ -93,7 +93,7 @@ def task_row(t, project_filter="", status_filter=""):
             '<div style="display:flex;align-items:center;gap:8px;">'
             f'<div style="width:28px;height:28px;border-radius:50%;background:{av_bg};color:{av_color};'
             f'font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">{initials}</div>'
-            f'<span style="font-size:13px;color:#cbd5e1;">{assignee}</span></div>'
+            f'<span style="font-size:13px;color:#e2e8f0;">{assignee}</span></div>'
         )
     else:
         assignee_html = '<span style="color:#CBD5E1;">—</span>'
@@ -136,7 +136,7 @@ def task_row(t, project_filter="", status_filter=""):
         f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
         f'<td style="padding:14px 12px;color:#94A3B8;font-size:12px;font-weight:600;white-space:nowrap;">#{tid}</td>'
         f'<td style="padding:14px 12px;min-width:220px;max-width:320px;">'
-        f'<div style="font-weight:500;font-size:14px;color:#e2e8f0;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
+        f'<div style="font-weight:500;font-size:14px;color:#f1f5f9;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
         f'</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
@@ -442,9 +442,9 @@ async def dashboard(request):
         ".tbl-wrap{background:#0d1424;border:1px solid rgba(255,255,255,.08);border-radius:14px;overflow:hidden;}\n"
         ".tbl-wrap table{width:100%;border-collapse:collapse;}\n"
         ".tbl-wrap thead th{padding:10px 13px;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.08em;background:#0a0f1e;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap;position:sticky;top:60px;z-index:10;}\n"
-        ".task-row{border-bottom:1px solid rgba(255,255,255,.05);transition:background .1s;background:#0d1424;}\n"
-        ".task-row:hover{background:#111b2e;}\n"
-        ".task-row td{padding:13px;vertical-align:middle;color:#e2e8f0;}\n"
+        ".task-row{border-bottom:1px solid rgba(255,255,255,.05);transition:background .1s;background:#0d1424 !important;}\n"
+        ".task-row:hover{background:#111b2e !important;}\n"
+        ".task-row td{padding:13px;vertical-align:middle;color:#e2e8f0 !important;}\n"
         ".act-btn{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;border:none;cursor:pointer;transition:all .15s;}\n"
         ".row-acts{display:flex;gap:3px;opacity:0;transition:opacity .15s;}\n"
         ".task-row:hover .row-acts{opacity:1;}\n"
