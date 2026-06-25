@@ -280,6 +280,24 @@ async def cmd_start(message: Message):
         parse_mode="Markdown"
     )
 
+    # Сразу отправляем активные задачи если есть
+    all_tasks = get_tasks()
+    my_tasks = [t for t in all_tasks if tg_name.lower() in (t.get("assignee") or "").lower()
+                or (t.get("assignee") or "").lower() in tg_name.lower()]
+    active = [t for t in my_tasks if t.get("status") not in ("Выполнена",)]
+    if active:
+        today = datetime.now().strftime("%Y-%m-%d")
+        lines = [f"📋 *Ваши активные задачи ({len(active)}):*\n"]
+        for t in active:
+            deadline = t.get("deadline") or "—"
+            overdue = " 🔴 *ПРОСРОЧЕНА*" if deadline != "—" and deadline < today else ""
+            lines.append(
+                f"• *#{t['id']}* {t['title'][:50]}{overdue}\n"
+                f"  📅 {deadline} | 📁 {t.get('project') or '—'}\n"
+                f"  /done {t['id']} — отметить выполненной"
+            )
+        await message.answer("\n".join(lines), parse_mode="Markdown")
+
 
 @router.callback_query(F.data.startswith("menu_"))
 async def handle_menu(callback: CallbackQuery, state: FSMContext):
