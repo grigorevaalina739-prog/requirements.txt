@@ -33,6 +33,19 @@ def seed_bord_16_06():
             )
 
 
+def fix_board_miniso_tasks():
+    """Ставит дедлайн 30.06.2026 задачам без срока в Board Miniso и удаляет 2 задачи."""
+    to_delete = [
+        "Рассмотреть снижение стоимости базовых товаров в региональных магазинах и оценить влияние на продажи и маржинальность",
+        "Вернуться к рассмотрению вопроса перестикеровки товаров на складе в Китае"
+    ]
+    with get_conn() as conn:
+        for title in to_delete:
+            conn.execute("DELETE FROM tasks WHERE title LIKE ?", (f"%{title[:40]}%",))
+        conn.execute(
+            "UPDATE tasks SET deadline='2026-06-30' WHERE project='Board Miniso' AND (deadline='' OR deadline IS NULL)"
+        )
+
 def migrate_bord_to_miniso():
     """Переносит задачи из Борд 16.06.2026 в Board Miniso и удаляет старый проект."""
     with get_conn() as conn:
@@ -123,6 +136,7 @@ def add_project(name):
 cleanup_users()
 migrate_bord_to_miniso()
 seed_bord_16_06()
+fix_board_miniso_tasks()
 
 def add_task(project, assignee, department, title, deadline, comment="", status="Открыта"):
     with get_conn() as conn:
