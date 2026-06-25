@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting
 from datetime import datetime, date
 
 routes = web.RouteTableDef()
@@ -617,3 +617,305 @@ tr:hover {{ transform: scaleY(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.08); po
 </html>"""
     return web.Response(text=html, content_type="text/html")
 
+
+
+# ─── Календарь встреч ──────────────────────────────────────────────────────
+@routes.get("/calendar")
+async def calendar_page(request):
+    from datetime import datetime, timedelta
+    import calendar as cal
+
+    now = datetime.now()
+    year = int(request.rel_url.query.get("year", now.year))
+    month = int(request.rel_url.query.get("month", now.month))
+    selected_project = request.rel_url.query.get("project", "")
+
+    month_str = f"{year}-{month:02d}"
+    meetings = get_meetings(month=month_str, project=selected_project or None)
+    projects = get_projects()
+
+    # Группируем встречи по дате
+    by_date = {}
+    for m in meetings:
+        by_date.setdefault(m["date"], []).append(m)
+
+    # Предыдущий и следующий месяц
+    first_day = datetime(year, month, 1)
+    prev = first_day - timedelta(days=1)
+    next_m = first_day + timedelta(days=32)
+    prev_url = f"/calendar?year={prev.year}&month={prev.month}"
+    next_url = f"/calendar?year={next_m.year}&month={next_m.month}"
+
+    month_names = ["","Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
+    month_name = month_names[month]
+
+    # Строим сетку календаря
+    cal.setfirstweekday(0)
+    weeks = cal.monthcalendar(year, month)
+    day_names = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"]
+
+    header_cells = "".join(f'<th style="padding:8px;text-align:center;font-size:12px;color:#6B7280;font-weight:600;">{d}</th>' for d in day_names)
+
+    grid_rows = ""
+    for week in weeks:
+        row = ""
+        for day in week:
+            if day == 0:
+                row += '<td style="padding:4px;background:#F9FAFB;border:1px solid #F3F4F6;"></td>'
+            else:
+                date_str = f"{year}-{month:02d}-{day:02d}"
+                day_meetings = by_date.get(date_str, [])
+                is_today = date_str == now.strftime("%Y-%m-%d")
+                bg = "#EFF6FF" if is_today else "white"
+                border = "2px solid #3B82F6" if is_today else "1px solid #F3F4F6"
+                dots = ""
+                for dm in day_meetings[:3]:
+                    color = "#3B82F6"
+                    dots += f'<div style="font-size:10px;background:{color}15;color:{color};border-radius:3px;padding:1px 4px;margin-top:2px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;" onclick="openMeeting({dm["id"]})">{dm["time_start"] or ""} {dm["title"][:20]}</div>'
+                if len(day_meetings) > 3:
+                    dots += f'<div style="font-size:10px;color:#9CA3AF;">+{len(day_meetings)-3} ещё</div>'
+                row += f'''<td style="padding:6px;background:{bg};border:{border};vertical-align:top;min-height:80px;cursor:pointer;" onclick="showAddForm('{date_str}')">
+                    <div style="font-weight:600;font-size:13px;color:{"#3B82F6" if is_today else "#374151"};">{day}</div>
+                    {dots}
+                </td>'''
+        grid_rows += f"<tr>{row}</tr>"
+
+    # Список встреч текущего месяца
+    meetings_list = ""
+    for m in meetings:
+        proj_badge = f'<span style="background:#EFF6FF;color:#3B82F6;padding:2px 8px;border-radius:10px;font-size:11px;">{m["project"]}</span>' if m.get("project") else ""
+        time_str = f'{m["time_start"]}' + (f' – {m["time_end"]}' if m.get("time_end") else "")
+        meetings_list += f'''<div style="display:flex;gap:12px;align-items:flex-start;padding:12px;border-bottom:1px solid #F3F4F6;">
+            <div style="min-width:50px;text-align:center;background:#EFF6FF;border-radius:8px;padding:6px;">
+                <div style="font-size:18px;font-weight:700;color:#3B82F6;">{m["date"][8:]}</div>
+                <div style="font-size:10px;color:#6B7280;">{month_names[int(m["date"][5:7])][:3]}</div>
+            </div>
+            <div style="flex:1;">
+                <div style="font-weight:600;font-size:14px;">{m["title"]}</div>
+                <div style="font-size:12px;color:#6B7280;margin-top:2px;">
+                    {"🕐 " + time_str if time_str else ""} {"👥 " + m["participants"] if m.get("participants") else ""} {proj_badge}
+                </div>
+                {f'<div style="font-size:12px;color:#9CA3AF;margin-top:4px;">{m["description"]}</div>' if m.get("description") else ""}
+            </div>
+            <div style="display:flex;gap:6px;">
+                <a href="/calendar/edit/{m["id"]}?back=/calendar?year={year}%26month={month}" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:#FFF;border:1px solid #E5E7EB;text-decoration:none;font-size:14px;">✏️</a>
+                <a href="/calendar/delete/{m["id"]}?back=/calendar?year={year}%26month={month}" onclick="return confirm('Удалить встречу?')" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:#FFF;border:1px solid #E5E7EB;text-decoration:none;font-size:14px;">🗑</a>
+            </div>
+        </div>'''
+
+    if not meetings_list:
+        meetings_list = '<div style="text-align:center;padding:32px;color:#9CA3AF;">Встреч в этом месяце нет</div>'
+
+    project_options = '<option value="">Все проекты</option>' + "".join(
+        f'<option value="{p["name"]}" {"selected" if p["name"]==selected_project else ""}>{p["name"]}</option>'
+        for p in projects
+    )
+    project_options_form = "".join(f'<option value="{p["name"]}">{p["name"]}</option>' for p in projects)
+    participants_list = ",".join([
+        "Абдуллах Н.","Камалов Н.","Кострыкин И.","Яманова Э.","Аскарова М.",
+        "Кульбаева Б.","Мырзағали Е.","Елемес Е.","Оспанова А.","Луданная Л.",
+        "Маркелова И.","Мустафина А.","Куниязов З."
+    ])
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Календарь встреч</title>
+<style>
+* {{ box-sizing:border-box; margin:0; padding:0; }}
+body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#F9FAFB; color:#111827; }}
+.header {{ background:#1E293B; color:white; padding:16px 32px; display:flex; align-items:center; gap:24px; }}
+.header h1 {{ font-size:18px; font-weight:700; }}
+.wrap {{ display:grid; grid-template-columns:1fr 320px; gap:24px; padding:24px 32px; }}
+.card {{ background:white; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.08); overflow:hidden; }}
+table {{ width:100%; border-collapse:collapse; }}
+.modal {{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:100; align-items:center; justify-content:center; }}
+.modal.open {{ display:flex; }}
+.modal-box {{ background:white; border-radius:16px; padding:28px; width:480px; max-width:95vw; }}
+.modal-box h2 {{ font-size:18px; font-weight:700; margin-bottom:20px; }}
+label {{ display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:6px; margin-top:14px; }}
+input,select,textarea {{ width:100%; padding:9px 12px; border:1px solid #E5E7EB; border-radius:8px; font-size:14px; font-family:inherit; }}
+textarea {{ height:70px; resize:vertical; }}
+.btns {{ display:flex; gap:10px; margin-top:20px; }}
+.btn-primary {{ padding:10px 20px; background:#3B82F6; color:white; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }}
+.btn-cancel {{ padding:10px 20px; background:#F3F4F6; color:#374151; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }}
+@media(max-width:900px) {{ .wrap {{ grid-template-columns:1fr; }} }}
+</style>
+</head>
+<body>
+<div class="header">
+  <a href="/" style="color:rgba(255,255,255,0.7);text-decoration:none;font-size:13px;">← Дашборд</a>
+  <h1>📅 Календарь встреч</h1>
+  <select onchange="location='?year={year}&month={month}&project='+this.value" style="background:rgba(255,255,255,0.1);color:white;border:1px solid rgba(255,255,255,0.3);border-radius:8px;padding:6px 10px;font-size:13px;margin-left:auto;">
+    {project_options}
+  </select>
+</div>
+
+<div class="wrap">
+  <div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #F3F4F6;">
+        <a href="{prev_url}" style="text-decoration:none;color:#374151;font-size:20px;padding:4px 10px;border-radius:6px;background:#F9FAFB;">‹</a>
+        <span style="font-size:17px;font-weight:700;">{month_name} {year}</span>
+        <a href="{next_url}" style="text-decoration:none;color:#374151;font-size:20px;padding:4px 10px;border-radius:6px;background:#F9FAFB;">›</a>
+      </div>
+      <table>
+        <thead><tr>{header_cells}</tr></thead>
+        <tbody>{grid_rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:#9CA3AF;text-align:center;">Нажмите на день чтобы добавить встречу</div>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="padding:16px 20px;border-bottom:1px solid #F3F4F6;display:flex;align-items:center;justify-content:space-between;">
+        <strong style="font-size:15px;">Встречи в {month_name}</strong>
+        <button onclick="showAddForm('{now.strftime('%Y-%m-%d')}')" style="padding:7px 14px;background:#3B82F6;color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">+ Добавить</button>
+      </div>
+      {meetings_list}
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно добавления встречи -->
+<div class="modal" id="addModal">
+  <div class="modal-box">
+    <h2>📅 Новая встреча</h2>
+    <form method="post" action="/calendar/add?back=/calendar?year={year}%26month={month}">
+      <label>Название встречи *</label>
+      <input type="text" name="title" id="meetingTitle" required placeholder="Например: Еженедельный борд">
+      <label>Дата *</label>
+      <input type="date" name="date" id="meetingDate" required>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label>Начало</label><input type="time" name="time_start"></div>
+        <div><label>Конец</label><input type="time" name="time_end"></div>
+      </div>
+      <label>Проект</label>
+      <select name="project"><option value="">Без проекта</option>{project_options_form}</select>
+      <label>Участники</label>
+      <input type="text" name="participants" placeholder="Маркелова И., Луданная Л." list="managers-list">
+      <datalist id="managers-list">{"".join(f'<option value="{p}">' for p in participants_list.split(","))}</datalist>
+      <label>Описание / повестка</label>
+      <textarea name="description" placeholder="Что обсуждаем..."></textarea>
+      <div class="btns">
+        <button type="submit" class="btn-primary">💾 Сохранить</button>
+        <button type="button" class="btn-cancel" onclick="closeModal()">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function showAddForm(date) {{
+  document.getElementById('meetingDate').value = date;
+  document.getElementById('addModal').classList.add('open');
+}}
+function closeModal() {{
+  document.getElementById('addModal').classList.remove('open');
+}}
+function openMeeting(id) {{
+  event.stopPropagation();
+  window.location = '/calendar/edit/' + id + '?back=/calendar?year={year}%26month={month}';
+}}
+document.getElementById('addModal').addEventListener('click', function(e) {{
+  if(e.target === this) closeModal();
+}});
+</script>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+@routes.post("/calendar/add")
+async def calendar_add(request):
+    back = request.rel_url.query.get("back", "/calendar")
+    data = await request.post()
+    add_meeting(
+        title=data.get("title","").strip(),
+        project=data.get("project",""),
+        date=data.get("date",""),
+        time_start=data.get("time_start",""),
+        time_end=data.get("time_end",""),
+        participants=data.get("participants",""),
+        description=data.get("description","")
+    )
+    raise web.HTTPFound(back)
+
+
+@routes.get("/calendar/delete/{meeting_id}")
+async def calendar_delete(request):
+    meeting_id = int(request.match_info["meeting_id"])
+    delete_meeting(meeting_id)
+    back = request.rel_url.query.get("back", "/calendar")
+    raise web.HTTPFound(back)
+
+
+@routes.get("/calendar/edit/{meeting_id}")
+async def calendar_edit_page(request):
+    from database import get_conn
+    meeting_id = int(request.match_info["meeting_id"])
+    back = request.rel_url.query.get("back", "/calendar")
+    projects = get_projects()
+    with get_conn() as conn:
+        m = conn.execute("SELECT * FROM meetings WHERE id=?", (meeting_id,)).fetchone()
+    if not m:
+        raise web.HTTPFound("/calendar")
+    m = dict(m)
+    project_options = "".join(
+        f'<option value="{p["name"]}" {"selected" if p["name"]==m.get("project") else ""}>{p["name"]}</option>'
+        for p in projects
+    )
+    participants_list = "Абдуллах Н.,Камалов Н.,Кострыкин И.,Яманова Э.,Аскарова М.,Кульбаева Б.,Мырзағали Е.,Елемес Е.,Оспанова А.,Луданная Л.,Маркелова И.,Мустафина А.,Куниязов З."
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="UTF-8"><title>Редактировать встречу</title>
+<style>* {{box-sizing:border-box;margin:0;padding:0;}} body {{font-family:-apple-system,sans-serif;background:#F9FAFB;color:#111827;}} .header {{background:#1E293B;color:white;padding:16px 32px;}} .wrap {{max-width:520px;margin:32px auto;background:white;border-radius:12px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.08);}} label {{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px;margin-top:14px;}} input,select,textarea {{width:100%;padding:9px 12px;border:1px solid #E5E7EB;border-radius:8px;font-size:14px;}} textarea {{height:70px;resize:vertical;}} .btns {{display:flex;gap:10px;margin-top:20px;}} .btn-primary {{padding:10px 20px;background:#3B82F6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;}} .btn-cancel {{padding:10px 20px;background:#F3F4F6;color:#374151;border:none;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;}}</style>
+</head>
+<body>
+<div class="header"><h1 style="font-size:18px;">✏️ Редактировать встречу</h1></div>
+<div class="wrap">
+  <form method="post" action="/calendar/edit/{meeting_id}?back={back}">
+    <label>Название *</label>
+    <input type="text" name="title" value="{m.get('title','')}" required>
+    <label>Дата *</label>
+    <input type="date" name="date" value="{m.get('date','')}">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><label>Начало</label><input type="time" name="time_start" value="{m.get('time_start','')}"></div>
+      <div><label>Конец</label><input type="time" name="time_end" value="{m.get('time_end','')}"></div>
+    </div>
+    <label>Проект</label>
+    <select name="project"><option value="">Без проекта</option>{project_options}</select>
+    <label>Участники</label>
+    <input type="text" name="participants" value="{m.get('participants','')}" list="managers-list">
+    <datalist id="managers-list">{"".join(f'<option value="{p}">' for p in participants_list.split(","))}</datalist>
+    <label>Описание / повестка</label>
+    <textarea name="description">{m.get('description','')}</textarea>
+    <div class="btns">
+      <button type="submit" class="btn-primary">💾 Сохранить</button>
+      <a href="{back}" class="btn-cancel">Отмена</a>
+    </div>
+  </form>
+</div>
+</body></html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+@routes.post("/calendar/edit/{meeting_id}")
+async def calendar_edit_save(request):
+    meeting_id = int(request.match_info["meeting_id"])
+    back = request.rel_url.query.get("back", "/calendar")
+    data = await request.post()
+    update_meeting(
+        meeting_id=meeting_id,
+        title=data.get("title","").strip(),
+        project=data.get("project",""),
+        date=data.get("date",""),
+        time_start=data.get("time_start",""),
+        time_end=data.get("time_end",""),
+        participants=data.get("participants",""),
+        description=data.get("description","")
+    )
+    raise web.HTTPFound(back)
