@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task
 from datetime import datetime, date
 
 routes = web.RouteTableDef()
@@ -729,12 +729,11 @@ textarea{{height:80px;resize:vertical;}}
 
 @routes.post("/newtask")
 async def newtask_save(request):
-    from database import add_task as db_add_task
     data = await request.post()
     title = data.get("title","").strip()
     if not title:
         raise web.HTTPFound("/newtask")
-    db_add_task(
+    add_task(
         project=data.get("project","Общие"),
         assignee=data.get("assignee",""),
         department=data.get("department",""),
