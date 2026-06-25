@@ -12,6 +12,26 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     return conn
 
+
+def seed_bord_16_06():
+    """Разовый импорт задач с Борд 16.06.2026."""
+    PROJECT = 'Борд 16.06.2026'
+    add_project(PROJECT)
+    TASKS = [{"assignee": "Мустафина А.", "title": "Подготовить письмо в Форум о переносе ярмарки", "status": "Выполнена", "comment": ""}, {"assignee": "Турбина Е.", "title": "Распределить ассортимент FIFA и Star Wars по магазинам согласно рейтингу и потенциалу продаж", "status": "Открыта", "comment": ""}, {"assignee": "Оспанова А.", "title": "Реструктурировать операционный отдел: Операционный менеджер, Мерчендайзер, 2 супервайзера", "status": "Открыта", "comment": ""}, {"assignee": "Мырзагали Е.", "title": "Разработать и утвердить процесс контроля сроков годности товаров", "status": "Открыта", "comment": "совместно с Турбина Е."}, {"assignee": "Турбина Е.", "title": "Разработать и утвердить процесс контроля сроков годности товаров", "status": "Открыта", "comment": "совместно с Мырзагали Е."}, {"assignee": "Мырзагали Е.", "title": "Организовать перестикеровку 13 товаров в связи с требованиями СЭС", "status": "Открыта", "comment": ""}, {"assignee": "Луданная Л.", "title": "Разработать шаблоны POSM-материалов для магазинов", "status": "Открыта", "comment": ""}, {"assignee": "Мустафина А.", "title": "Подготовить письмо в Москву по вопросу отмены работы магазинов за 2 дня в связи с отсутствием электроснабжения", "status": "Открыта", "comment": ""}, {"assignee": "", "title": "Рассмотреть снижение стоимости базовых товаров в региональных магазинах и оценить влияние на продажи и маржинальность", "status": "Открыта", "comment": ""}, {"assignee": "", "title": "Вернуться к рассмотрению вопроса перестикеровки товаров на складе в Китае", "status": "Открыта", "comment": ""}]
+    with get_conn() as conn:
+        existing = set(
+            row[0] for row in conn.execute(
+                "SELECT title FROM tasks WHERE project=?", (PROJECT,)
+            ).fetchall()
+        )
+        for t in TASKS:
+            if t['title'] in existing:
+                continue
+            conn.execute(
+                "INSERT INTO tasks (project, assignee, department, title, deadline, status, comment) VALUES (?,?,?,?,?,?,?)",
+                (PROJECT, t['assignee'], '', t['title'], '', t['status'], t['comment'])
+            )
+
 def cleanup_users():
     """Удаляет указанных пользователей из базы при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
@@ -83,6 +103,7 @@ def add_project(name):
 
 # Запускаем очистку при старте
 cleanup_users()
+seed_bord_16_06()
 
 def add_task(project, assignee, department, title, deadline, comment="", status="Открыта"):
     with get_conn() as conn:
