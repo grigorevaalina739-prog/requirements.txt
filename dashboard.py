@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment
 from datetime import datetime, date
 
 routes = web.RouteTableDef()
@@ -269,3 +269,233 @@ def create_app():
     app = web.Application()
     app.add_routes(routes)
     return app
+
+# ─── Страница редактирования задачи ────────────────────────────────────────
+@routes.get("/edit/{task_id}")
+async def edit_task_page(request):
+    task_id = int(request.match_info["task_id"])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        raise web.HTTPFound("/")
+    back = request.rel_url.query.get("back", "/")
+    projects = get_projects()
+    project_options = "".join(
+        f'<option value="{p["name"]}" {"selected" if p["name"] == task["project"] else ""}>{p["name"]}</option>'
+        for p in projects
+    )
+    status_options = "".join(
+        f'<option value="{s}" {"selected" if s == task["status"] else ""}>{s}</option>'
+        for s in ["Открыта", "В работе", "Выполнена"]
+    )
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Редактировать задачу #{task_id}</title>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
+.header {{ background: #1E293B; color: white; padding: 20px 32px; }}
+.header h1 {{ font-size: 20px; font-weight: 700; }}
+.form-wrap {{ max-width: 600px; margin: 32px auto; background: white; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
+label {{ display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; margin-top: 16px; }}
+input, select, textarea {{ width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; font-family: inherit; }}
+textarea {{ height: 80px; resize: vertical; }}
+.btns {{ display: flex; gap: 12px; margin-top: 24px; }}
+.btn-save {{ padding: 10px 24px; background: #3B82F6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }}
+.btn-cancel {{ padding: 10px 24px; background: #F3F4F6; color: #374151; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }}
+</style>
+</head>
+<body>
+<div class="header"><h1>✏️ Редактировать задачу #{task_id}</h1></div>
+<div class="form-wrap">
+  <form method="post" action="/edit/{task_id}?back={back}">
+    <label>Задача</label>
+    <input type="text" name="title" value="{task['title'] or ''}" required>
+    <label>Ответственный</label>
+    <input type="text" name="assignee" value="{task['assignee'] or ''}">
+    <label>Отдел</label>
+    <input type="text" name="department" value="{task['department'] or ''}">
+    <label>Проект</label>
+    <select name="project">{project_options}</select>
+    <label>Срок</label>
+    <input type="date" name="deadline" value="{task['deadline'] or ''}">
+    <label>Статус</label>
+    <select name="status">{status_options}</select>
+    <label>Комментарий</label>
+    <textarea name="comment">{task['comment'] or ''}</textarea>
+    <div class="btns">
+      <button type="submit" class="btn-save">💾 Сохранить</button>
+      <a href="{back}" class="btn-cancel">Отмена</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+@routes.post("/edit/{task_id}")
+async def edit_task_save(request):
+    task_id = int(request.match_info["task_id"])
+    back = request.rel_url.query.get("back", "/")
+    data = await request.post()
+    from database import get_conn
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE tasks SET title=?, assignee=?, department=?, project=?, deadline=?, status=?, comment=? WHERE id=?",
+            (
+                data.get("title", ""),
+                data.get("assignee", ""),
+                data.get("department", ""),
+                data.get("project", ""),
+                data.get("deadline", ""),
+                data.get("status", "Открыта"),
+                data.get("comment", ""),
+                task_id,
+            )
+        )
+    raise web.HTTPFound(back)
+
+
+# ─── Страница комментария ───────────────────────────────────────────────────
+@routes.get("/comment/{task_id}")
+async def comment_task_page(request):
+    task_id = int(request.match_info["task_id"])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        raise web.HTTPFound("/")
+    back = request.rel_url.query.get("back", "/")
+    comments = get_task_comments(task_id)
+    comments_html = ""
+    for c in comments:
+        time = c.get("created_at", "")[:16]
+        if c.get("file_id"):
+            comments_html += f'<div class="comment"><span class="author">📎 {c["author"]}</span><span class="time">{time}</span><div>{c["file_name"]} {c.get("text","")}</div></div>'
+        else:
+            comments_html += f'<div class="comment"><span class="author">💬 {c["author"]}</span><span class="time">{time}</span><div>{c.get("text","")}</div></div>'
+    if not comments_html:
+        comments_html = '<div style="color:#9CA3AF;font-size:13px;">Комментариев пока нет</div>'
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Комментарии к задаче #{task_id}</title>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
+.header {{ background: #1E293B; color: white; padding: 20px 32px; }}
+.header h1 {{ font-size: 20px; font-weight: 700; }}
+.header p {{ opacity: 0.7; font-size: 13px; margin-top: 4px; }}
+.wrap {{ max-width: 600px; margin: 32px auto; }}
+.card {{ background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }}
+.comment {{ padding: 12px 0; border-bottom: 1px solid #F3F4F6; }}
+.comment:last-child {{ border-bottom: none; }}
+.author {{ font-weight: 600; font-size: 13px; color: #374151; }}
+.time {{ font-size: 11px; color: #9CA3AF; margin-left: 8px; }}
+textarea {{ width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; font-family: inherit; height: 100px; resize: vertical; margin-top: 12px; }}
+input[type=text] {{ width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; margin-top: 8px; }}
+label {{ font-size: 13px; font-weight: 600; color: #374151; }}
+.btns {{ display: flex; gap: 12px; margin-top: 16px; }}
+.btn-save {{ padding: 10px 24px; background: #7C3AED; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }}
+.btn-cancel {{ padding: 10px 24px; background: #F3F4F6; color: #374151; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>💬 Комментарии к задаче #{task_id}</h1>
+  <p>{task['title']}</p>
+</div>
+<div class="wrap">
+  <div class="card">
+    <strong>История комментариев</strong>
+    <div style="margin-top:12px;">{comments_html}</div>
+  </div>
+  <div class="card">
+    <form method="post" action="/comment/{task_id}?back={back}">
+      <label>Автор</label>
+      <input type="text" name="author" placeholder="Ваше имя" required>
+      <label style="margin-top:12px;display:block;">Комментарий</label>
+      <textarea name="text" placeholder="Напишите комментарий..." required></textarea>
+      <div class="btns">
+        <button type="submit" class="btn-save">💬 Отправить</button>
+        <a href="{back}" class="btn-cancel">Отмена</a>
+      </div>
+    </form>
+  </div>
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+@routes.post("/comment/{task_id}")
+async def comment_task_save(request):
+    task_id = int(request.match_info["task_id"])
+    back = request.rel_url.query.get("back", "/")
+    data = await request.post()
+    author = data.get("author", "Аноним")
+    text = data.get("text", "").strip()
+    if text:
+        add_task_comment(task_id=task_id, author=author, text=text)
+    raise web.HTTPFound(f"/comment/{task_id}?back={back}")
+
+
+# ─── Страница вложений ──────────────────────────────────────────────────────
+@routes.get("/attach/{task_id}")
+async def attach_task_page(request):
+    task_id = int(request.match_info["task_id"])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        raise web.HTTPFound("/")
+    back = request.rel_url.query.get("back", "/")
+    comments = get_task_comments(task_id)
+    files = [c for c in comments if c.get("file_id")]
+    files_html = ""
+    for f in files:
+        time = f.get("created_at", "")[:16]
+        files_html += f'<div class="file-item">📎 <strong>{f["file_name"]}</strong> — {f["author"]} <span style="color:#9CA3AF;font-size:11px;">{time}</span></div>'
+    if not files_html:
+        files_html = '<div style="color:#9CA3AF;font-size:13px;">Вложений пока нет. Добавить вложения можно через Telegram-бота.</div>'
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Вложения задачи #{task_id}</title>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
+.header {{ background: #1E293B; color: white; padding: 20px 32px; }}
+.header h1 {{ font-size: 20px; font-weight: 700; }}
+.header p {{ opacity: 0.7; font-size: 13px; margin-top: 4px; }}
+.wrap {{ max-width: 600px; margin: 32px auto; }}
+.card {{ background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
+.file-item {{ padding: 12px 0; border-bottom: 1px solid #F3F4F6; font-size: 14px; }}
+.file-item:last-child {{ border-bottom: none; }}
+.btn-back {{ display: inline-block; margin-top: 16px; padding: 10px 24px; background: #F3F4F6; color: #374151; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; }}
+.note {{ margin-top: 16px; padding: 12px; background: #FFF7ED; border-radius: 8px; font-size: 13px; color: #92400E; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📎 Вложения задачи #{task_id}</h1>
+  <p>{task['title']}</p>
+</div>
+<div class="wrap">
+  <div class="card">
+    <strong>Файлы</strong>
+    <div style="margin-top:12px;">{files_html}</div>
+  </div>
+  <div class="note">💡 Чтобы прикрепить файл — напишите боту в Telegram: /mytasks и выберите задачу #{task_id}</div>
+  <a href="{back}" class="btn-back">← Назад</a>
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
