@@ -348,7 +348,7 @@ async def dashboard(request):
             f'<div style="font-size:13px;font-weight:800;color:#3b82f6;line-height:1;">{day}</div>' +
             f'<div style="font-size:9px;color:#64748b;">{mon}</div></div>' +
             f'<div style="min-width:0;flex:1;">' +
-            f'<div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{t["title"]}">{short_title}</div>' +
+            f'<div style="font-size:12px;color:#1e293b;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{t["title"]}">{short_title}</div>' +
             f'<div style="font-size:11px;color:#64748b;margin-top:1px;">{assignee}</div>' +
             f'</div></div>'
         )
