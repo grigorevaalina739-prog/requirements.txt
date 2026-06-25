@@ -959,50 +959,60 @@ async def attach_task_page(request):
     files = [c for c in comments if c.get("file_id")]
     files_html = ""
     for f in files:
-        time = f.get("created_at", "")[:16]
-        files_html += f'<div class="file-item">📎 <strong>{f["file_name"]}</strong> — {f["author"]} <span style="color:#9CA3AF;font-size:11px;">{time}</span></div>'
+        dt = (f.get("created_at") or "")[:16].replace("T", " ")
+        icon = "🖼️" if f.get("file_type") == "photo" else ("🎬" if f.get("file_type") == "video" else "📄")
+        files_html += (
+            f'<div style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid #f1f5f9;">'
+            f'<div style="width:40px;height:40px;background:#eff6ff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">{icon}</div>'
+            f'<div style="flex:1;">'
+            f'<div style="font-weight:600;font-size:14px;color:#0f172a;">{f.get("file_name","файл")}</div>'
+            f'<div style="font-size:12px;color:#64748b;margin-top:2px;">👤 {f["author"]} &nbsp;·&nbsp; 🕐 {dt}</div>'
+            + (f'<div style="font-size:12px;color:#475569;margin-top:2px;">💬 {f["text"]}</div>' if f.get("text") else "")
+            + f'</div></div>'
+        )
     if not files_html:
-        files_html = '<div style="color:#9CA3AF;font-size:13px;">Вложений пока нет. Добавить вложения можно через Telegram-бота.</div>'
+        files_html = '<div style="text-align:center;padding:40px 20px;"><div style="font-size:40px;margin-bottom:12px;">📭</div><p style="color:#94a3b8;font-size:14px;">Вложений пока нет</p></div>'
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Вложения задачи #{task_id}</title>
 <style>
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
-.header {{ background: #1E293B; color: white; padding: 20px 32px; }}
-.header h1 {{ font-size: 20px; font-weight: 700; }}
-.header p {{ opacity: 0.7; font-size: 13px; margin-top: 4px; }}
-.wrap {{ max-width: 600px; margin: 32px auto; }}
-.card {{ background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
-.file-item {{ padding: 12px 0; border-bottom: 1px solid #F3F4F6; font-size: 14px; }}
-.file-item:last-child {{ border-bottom: none; }}
-.btn-back {{ display: inline-block; margin-top: 16px; padding: 10px 24px; background: #F3F4F6; color: #374151; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; }}
-.note {{ margin-top: 16px; padding: 12px; background: #FFF7ED; border-radius: 8px; font-size: 13px; color: #92400E; }}
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f6fb;color:#0f172a;}}
+.topbar{{background:white;border-bottom:1px solid #e2e8f0;padding:0 32px;height:56px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);}}
+.topbar a{{color:#64748b;text-decoration:none;font-size:13px;}}
+.topbar a:hover{{color:#1d4ed8;}}
+.topbar h1{{font-size:15px;font-weight:700;color:#0f172a;}}
+.wrap{{max-width:640px;margin:28px auto;padding:0 16px;}}
+.card{{background:white;border-radius:16px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.07);border:1px solid #e2e8f0;margin-bottom:16px;}}
+.note{{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px 16px;font-size:13px;color:#1d4ed8;}}
+.btn-back{{display:inline-flex;align-items:center;gap:6px;margin-top:16px;padding:9px 18px;background:white;color:#374151;border:1px solid #e2e8f0;border-radius:10px;text-decoration:none;font-size:13px;font-weight:500;}}
+.btn-back:hover{{background:#f8fafc;border-color:#93c5fd;color:#1d4ed8;}}
 </style>
 </head>
 <body>
-<div class="header">
-  <h1>📎 Вложения задачи #{task_id}</h1>
-  <p>{task['title']}</p>
-</div>
+<div class="topbar"><a href="{back}">← Назад</a><h1>📎 Вложения задачи #{task_id}</h1></div>
 <div class="wrap">
   <div class="card">
-    <strong>Файлы</strong>
-    <div style="margin-top:12px;">{files_html}</div>
+    <div style="font-weight:600;font-size:14px;color:#0f172a;">{task["title"]}</div>
+    <div style="font-size:12px;color:#64748b;margin-top:4px;">👤 {task.get("assignee") or "—"} · 📁 {task.get("project") or "—"} · 📅 {task.get("deadline") or "—"}</div>
   </div>
-  <div class="note">💡 Чтобы прикрепить файл — напишите боту в Telegram: /mytasks и выберите задачу #{task_id}</div>
-  <a href="{back}" class="btn-back">← Назад</a>
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:12px;">
+      Файлы <span style="background:#eff6ff;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-size:11px;margin-left:6px;">{len(files)}</span>
+    </div>
+    {files_html}
+  </div>
+  <div class="note">💡 Прикрепить файл: напишите боту <strong>/attach {task_id}</strong> в Telegram</div>
+  <a href="{back}" class="btn-back">← К задачам</a>
 </div>
 </body>
 </html>"""
     return web.Response(text=html, content_type="text/html")
 
 
-
-# ─── История изменений задачи ───────────────────────────────────────────────
 @routes.get("/history/{task_id}")
 async def task_history_page(request):
     task_id = int(request.match_info["task_id"])
