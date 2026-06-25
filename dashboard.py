@@ -319,9 +319,15 @@ async def dashboard(request):
     else:
         ai_text = f"Сегодня {today_dl} задач с дедлайном. {open_all} в работе. Риск: {risk_label}."
     workload_html = "".join(
-        f'<div class="workload-row"><div class="wl-name">{name.split()[0]}</div><div class="wl-bar-bg"><div class="wl-bar-fill" style="width:{min(100,cnt*20)}%;"></div></div><div class="wl-count">{cnt}</div></div>'
+        (
+            f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+            f'<span style="font-size:12px;color:#334155;width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;font-weight:500;">{name.split()[0]}</span>' +
+            f'<div style="flex:1;background:#e2e8f0;border-radius:999px;height:5px;overflow:hidden;">' +
+            f'<div style="width:{min(100,cnt*20)}%;height:100%;background:linear-gradient(90deg,#4f8ef7,#6366f1);border-radius:999px;"></div></div>' +
+            f'<span style="font-size:11px;color:#64748b;min-width:14px;text-align:right;font-weight:600;">{cnt}</span></div>'
+        )
         for name, cnt in workload_sorted
-    ) if workload_sorted else '<div style="font-size:12px;color:var(--muted);">Нет данных</div>'
+    ) if workload_sorted else '<div style="font-size:12px;color:#94a3b8;">Нет данных</div>'
     upcoming_html = ""
     seen_dl = set()
     for t in upcoming:
@@ -407,23 +413,23 @@ async def dashboard(request):
         ".prog-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}\n"
         ".prog-title{font-size:13px;font-weight:600;color:var(--text);}\n"
         ".prog-insight{font-size:11px;color:var(--muted);margin-top:3px;}\n"
-        ".prog-pct{font-size:26px;font-weight:800;color:var(--accent);}\n"
+        ".prog-pct{font-size:26px;font-weight:800;color:#1d4ed8;}\n"
         ".bar-bg{background:#e2e8f0;border-radius:999px;height:7px;overflow:hidden;margin-bottom:10px;}\n"
         ".bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#4f8ef7,#7b6cf6,#8b78f0);animation:fb .8s ease;}\n"
         "@keyframes fb{from{width:0%}}\n"
         ".sdots{display:flex;gap:14px;flex-wrap:wrap;}\n"
-        ".sdot{display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b;}\n"
+        ".sdot{display:flex;align-items:center;gap:6px;font-size:11px;color:#64748b;font-weight:500;}\n"
         ".sdot-c{width:7px;height:7px;border-radius:50%;flex-shrink:0;}\n"
         ".att-card{background:white;border:1px solid var(--border);box-shadow:var(--shadow);border-radius:14px;padding:16px;margin-bottom:18px;}\n"
         ".att-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:8px;}\n"
-        ".att-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;}\n"
+        ".att-row{display:flex;align-items:center;gap:9px;padding:8px 4px;border-bottom:1px solid #f1f5f9;font-size:12px;}\n"
         ".att-row:last-child{border-bottom:none;}\n"
         ".att-icon{font-size:13px;flex-shrink:0;}\n"
         ".att-text{flex:1;color:#374151;}\n"
         ".att-text b{color:#0f172a;}\n"
         ".att-who{font-size:11px;color:#94a3b8;white-space:nowrap;}\n"
-        ".att-urgent,.att-over{border-left:2px solid #ef4444;padding-left:9px;margin-left:-9px;}\n"
-        ".att-info{border-left:2px solid #3b82f6;padding-left:9px;margin-left:-9px;}\n"
+        ".att-urgent,.att-over{border-left:3px solid #e05c5c;padding-left:9px;margin-left:-9px;background:#fff5f5;border-radius:0 4px 4px 0;}\n"
+        ".att-info{border-left:3px solid #4f8ef7;padding-left:9px;margin-left:-9px;background:#f0f6ff;border-radius:0 4px 4px 0;}\n"
         ".att-empty{text-align:center;padding:18px;color:#94a3b8;font-size:13px;}\n"
         ".att-empty p{margin-top:6px;}\n"
         ".ctrl-bar{background:white;border:1px solid var(--border);box-shadow:var(--shadow);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}\n"
@@ -450,13 +456,13 @@ async def dashboard(request):
         ".task-row:hover .row-acts{opacity:1;}\n"
         ".empty-st{text-align:center;padding:50px;color:#94a3b8;}\n"
         ".sb-sec{margin-bottom:18px;padding:0 10px;}\n"
-        ".sb-title{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}\n"
+        ".sb-title{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;padding:0 10px;}\n"
         ".sb-dl{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #f1f5f9;}\n"
         ".sb-dl:last-child{border-bottom:none;}\n"
         ".dl-date{width:34px;height:34px;background:#eff6ff;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;}\n"
         ".dl-day{font-size:13px;font-weight:800;color:#1d4ed8;line-height:1;}\n"
         ".dl-mon{font-size:9px;color:var(--muted);}\n"
-        ".dl-info .tl{font-size:12px;color:#334155;line-height:1.3;}\n"
+        ".dl-info .tl{font-size:12px;color:#1e293b;line-height:1.3;font-weight:500;}\n"
         ".dl-info .wh{font-size:11px;color:#94a3b8;margin-top:1px;}\n"
         ".wl-row{display:flex;align-items:center;gap:7px;margin-bottom:7px;}\n"
         ".wl-name{font-size:11px;color:#475569;width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;}\n"
