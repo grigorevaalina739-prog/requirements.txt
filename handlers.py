@@ -282,8 +282,31 @@ async def cmd_start(message: Message):
 
     # Сразу отправляем активные задачи если есть
     all_tasks = get_tasks()
-    my_tasks = [t for t in all_tasks if tg_name.lower() in (t.get("assignee") or "").lower()
-                or (t.get("assignee") or "").lower() in tg_name.lower()]
+
+    # Матчинг: ищем задачи где assignee совпадает с именем, фамилией или частью имени
+    # Также проверяем через MANAGERS — находим запись в списке по совпадению с tg_name
+    def name_matches(tg, assignee):
+        tg_l = tg.lower()
+        as_l = (assignee or "").lower()
+        if not as_l:
+            return False
+        # Прямое совпадение
+        if tg_l in as_l or as_l in tg_l:
+            return True
+        # Совпадение по фамилии (первое слово assignee)
+        surname = as_l.split()[0] if as_l else ""
+        if surname and surname in tg_l:
+            return True
+        # Проверяем через MANAGERS — если tg_name совпадает с именем менеджера
+        for mgr in MANAGERS:
+            mgr_l = mgr.lower()
+            mgr_surname = mgr_l.split()[0]
+            if mgr_surname in tg_l or tg_l in mgr_l:
+                if mgr_surname in as_l or mgr_l.split()[0] in as_l:
+                    return True
+        return False
+
+    my_tasks = [t for t in all_tasks if name_matches(tg_name, t.get("assignee"))]
     active = [t for t in my_tasks if t.get("status") not in ("Выполнена",)]
     if active:
         today = datetime.now().strftime("%Y-%m-%d")
