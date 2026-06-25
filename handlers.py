@@ -224,22 +224,22 @@ async def show_multiple_preview(target, state, edit=False):
 # ─── /start ────────────────────────────────────────────────────────────────
 @router.message(CommandStart())
 async def cmd_start(message: Message):
+    # Авторегистрация по имени из Telegram
+    tg_name = " ".join(filter(None, [message.from_user.first_name, message.from_user.last_name]))
+    if not tg_name:
+        tg_name = message.from_user.username or f"user_{message.from_user.id}"
+    register_user(message.from_user.id, tg_name)
     await message.answer(
-        "👋 Привет! Я агент управления задачами.\n\n"
-        "➕ /newtask — создать задачу\n"
-        "✏️ /edit <ID> — редактировать задачу\n"
-        "✏️ /editall — редактировать все задачи\n"
-        "🗑 /delete <ID> — удалить задачу\n"
+        f"👋 Привет, *{tg_name}*! Я агент управления задачами.\n\n"
+        "Просто напишите мне задачу — я создам её автоматически.\n\n"
+        "Или используйте команды:\n"
         "📋 /mytasks — мои задачи\n"
-        "📊 /dashboard — дашборд\n"
-        "📋 /tasks — задачи по проектам\n"
         "✅ /done <ID> — отметить выполненной\n"
-        "⚠️ /overdue — просроченные\n"
-        "📁 /projects — список проектов\n"
-        "🆕 /newproject — создать проект\n"
-        "👤 /register — зарегистрироваться для уведомлений\n"
-        "📎 /attach <ID> — прикрепить файл к задаче\n"
-        "💬 /comment <ID> — добавить комментарий к задаче"
+        "📎 /attach <ID> — прикрепить файл\n"
+        "💬 /comment <ID> — комментарий\n"
+        "📊 /dashboard — открыть дашборд\n"
+        "⚠️ /overdue — просроченные задачи",
+        parse_mode="Markdown"
     )
 
 
@@ -254,18 +254,16 @@ async def cmd_dashboard(message: Message):
 @router.message(Command("register"))
 async def cmd_register(message: Message):
     parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        await message.answer(
-            "👤 Введите своё имя после команды:\n"
-            "Например: `/register Турбина Е.`",
-            parse_mode="Markdown"
-        )
-        return
-    name = parts[1].strip()
+    if len(parts) >= 2:
+        name = parts[1].strip()
+    else:
+        name = " ".join(filter(None, [message.from_user.first_name, message.from_user.last_name]))
+        if not name:
+            name = message.from_user.username or f"user_{message.from_user.id}"
     register_user(message.from_user.id, name)
     await message.answer(
-        f"✅ Вы зарегистрированы как *{name}*!\n\n"
-        f"Теперь вы будете получать уведомления когда вам назначают задачи.",
+        f"✅ Зарегистрированы как *{name}*!\n"
+        f"Уведомления будут приходить сюда.",
         parse_mode="Markdown"
     )
 
@@ -941,8 +939,12 @@ async def cmd_done(message: Message):
     if len(parts) < 2 or not parts[1].isdigit():
         await message.answer("Укажите ID: /done 5")
         return
-    update_status(int(parts[1]), "Выполнена")
-    await message.answer(f"✅ Задача #{parts[1]} выполнена!")
+    task_id = int(parts[1])
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
+    author = user["name"] if user else (message.from_user.first_name or "Неизвестно")
+    update_status(task_id, "Выполнена", changed_by=author)
+    await message.answer(f"✅ Задача #{task_id} выполнена! Записано: {author}")
 
 
 # ─── /overdue ──────────────────────────────────────────────────────────────
@@ -988,3 +990,104 @@ async def process_project_name(message: Message, state: FSMContext):
     await state.clear()
     await message.answer(f"✅ Проект *{name}* создан!", parse_mode="Markdown")
 
+
+
+
+# ─── Универсальный обработчик — любой текст создаёт задачу ────────────────
+# Срабатывает только когда нет активного FSM состояния и это не команда
+@router.message(F.text, ~F.text.startswith("/"))
+async def universal_task_creator(message: Message, state: FSMContext):
+    """Любое текстовое сообщение без команды → создаёт задачу через AI."""
+    current_state = await state.get_state()
+    if current_state is not None:
+        # Если есть активный FSM — не перехватываем
+        return
+
+    # Авторегистрация если ещё не зарегистрирован
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
+    if not user:
+        tg_name = " ".join(filter(None, [message.from_user.first_name, message.from_user.last_name]))
+        if not tg_name:
+            tg_name = message.from_user.username or f"user_{message.from_user.id}"
+        register_user(message.from_user.id, tg_name)
+
+    # Парсим задачу через AI
+    thinking_msg = await message.answer("🤖 Создаю задачу...")
+    today = datetime.now().strftime("%Y-%m-%d")
+    result = await parse_task_with_ai(message.text, today)
+
+    if not result:
+        await thinking_msg.delete()
+        await message.answer(
+            "❌ Не понял — попробуйте описать задачу подробнее.\n"
+            "Например: _Маркелова И. — подготовить отчёт по складу до 30 июня_",
+            parse_mode="Markdown"
+        )
+        return
+
+    await thinking_msg.delete()
+
+    # Несколько задач
+    if result.get("is_multiple") and result.get("tasks"):
+        tasks = result["tasks"]
+        first = tasks[0] if tasks else {}
+        await state.update_data(
+            multiple_tasks=tasks,
+            selected_project="",
+            selected_deadline=first.get("deadline", ""),
+            selected_assignee=first.get("assignee", "")
+        )
+        projects = get_projects()
+        if projects:
+            await state.set_state(TaskCreation.choosing_project)
+            await message.answer(
+                f"📋 Нашёл *{len(tasks)} задач*. В какой проект добавить?",
+                reply_markup=projects_keyboard(projects),
+                parse_mode="Markdown"
+            )
+        else:
+            await state.update_data(selected_project="Общие")
+            await show_multiple_preview(message, state)
+        return
+
+    # Одна задача — если всё заполнено, сохраняем сразу без подтверждения
+    parsed = result
+    project = parsed.get("project", "")
+    projects = get_projects()
+
+    # Если проект не распознан — спрашиваем
+    if not project and projects:
+        await state.update_data(parsed=parsed)
+        await state.set_state(TaskCreation.choosing_project)
+        await message.answer(
+            f"📌 *{parsed.get('title', '—')}*\n"
+            f"👤 {parsed.get('assignee') or '—'} | 📅 {parsed.get('deadline') or '—'}\n\n"
+            "📁 В какой проект?",
+            reply_markup=projects_keyboard(projects),
+            parse_mode="Markdown"
+        )
+        return
+
+    # Сохраняем сразу
+    if not project:
+        project = "Общие"
+    task_id = add_task(
+        project=project,
+        assignee=parsed.get("assignee") or "",
+        department=parsed.get("department") or "",
+        title=parsed.get("title") or message.text[:100],
+        deadline=parsed.get("deadline") or "",
+        comment=parsed.get("description") or "",
+    )
+    await notify_assignee(message.bot, parsed.get("assignee") or "", parsed.get("title") or "", project, parsed.get("deadline") or "")
+
+    assignee_str = parsed.get("assignee") or "—"
+    deadline_str = parsed.get("deadline") or "—"
+    await message.answer(
+        f"✅ *Задача #{task_id} создана!*\n\n"
+        f"📌 {parsed.get('title')}\n"
+        f"👤 {assignee_str} | 📁 {project} | 📅 {deadline_str}\n\n"
+        f"_Используйте /done {task_id} когда выполните_",
+        parse_mode="Markdown"
+    )
