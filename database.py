@@ -12,6 +12,13 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     return conn
 
+def cleanup_users():
+    """Удаляет указанных пользователей из базы при запуске."""
+    to_delete = ["Аскарова", "Елемес", "Яманова"]
+    with get_conn() as conn:
+        for name in to_delete:
+            conn.execute("DELETE FROM users WHERE name LIKE ?", (f"%{name}%",))
+
 def init_db():
     with get_conn() as conn:
         conn.executescript("""
@@ -73,6 +80,9 @@ def add_project(name):
     except Exception as e:
         logger.error(f"Ошибка добавления проекта: {e}")
         return False
+
+# Запускаем очистку при старте
+cleanup_users()
 
 def add_task(project, assignee, department, title, deadline, comment="", status="Открыта"):
     with get_conn() as conn:
@@ -193,3 +203,4 @@ def get_task_history(task_id: int):
             "SELECT * FROM task_history WHERE task_id=? ORDER BY changed_at DESC",
             (task_id,)
         ).fetchall()]
+
