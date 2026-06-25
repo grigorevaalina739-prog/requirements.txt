@@ -1286,3 +1286,24 @@ async def cmd_assignees(message: Message):
     for i, name in enumerate(MANAGERS, 1):
         lines.append(f"{i}. {name}")
     await message.answer("\n".join(lines), parse_mode="Markdown")
+
+
+# ─── /deleteuser — удалить пользователя из базы ───────────────────────────
+@router.message(Command("deleteuser"))
+async def cmd_delete_user(message: Message):
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Укажите имя: /deleteuser Аскарова")
+        return
+    name = parts[1].strip()
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM users").fetchall()
+        found = [dict(r) for r in rows if name.lower() in r["name"].lower()]
+        if not found:
+            await message.answer(f"❌ Пользователь *{name}* не найден.", parse_mode="Markdown")
+            return
+        for user in found:
+            conn.execute("DELETE FROM users WHERE telegram_id=?", (user["telegram_id"],))
+        names = ", ".join(u["name"] for u in found)
+    await message.answer(f"✅ Удалено: *{names}*", parse_mode="Markdown")
+
