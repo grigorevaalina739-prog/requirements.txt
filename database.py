@@ -215,12 +215,29 @@ def register_user(telegram_id: int, name: str):
         return False
 
 def get_user_by_name(name: str):
+    """Ищет пользователя по имени — поддерживает форматы:
+    'Луданная Л.' -> совпадёт с 'Лидия Луданная', 'Ludannaya' и т.д.
+    """
     with get_conn() as conn:
         rows = conn.execute("SELECT * FROM users").fetchall()
-        name_lower = name.lower()
+        name_lower = name.strip().lower()
+        # Извлекаем фамилию (первое слово) из искомого имени
+        search_surname = name_lower.split()[0] if name_lower else ""
+
         for row in rows:
-            if name_lower in row["name"].lower() or row["name"].lower() in name_lower:
+            row_name = row["name"].lower().strip()
+            # 1. Прямое совпадение
+            if name_lower in row_name or row_name in name_lower:
                 return dict(row)
+            # 2. Совпадение по фамилии (первое слово искомого в любом слове пользователя)
+            if search_surname and len(search_surname) >= 4:
+                for word in row_name.split():
+                    if search_surname in word or word in search_surname:
+                        return dict(row)
+            # 3. Совпадение по фамилии пользователя в искомом имени
+            for word in row_name.split():
+                if len(word) >= 4 and word in name_lower:
+                    return dict(row)
     return None
 
 def get_all_users():
@@ -297,4 +314,5 @@ def update_meeting(meeting_id, title, project, date, time_start, time_end, parti
             (title, project, date, time_start, time_end, participants, description, meeting_id)
         )
     return True
+
 
