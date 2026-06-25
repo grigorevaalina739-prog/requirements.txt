@@ -93,7 +93,7 @@ def task_row(t, project_filter="", status_filter=""):
             '<div style="display:flex;align-items:center;gap:8px;">'
             f'<div style="width:28px;height:28px;border-radius:50%;background:{av_bg};color:{av_color};'
             f'font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">{initials}</div>'
-            f'<span style="font-size:13px;color:#374151;">{assignee}</span></div>'
+            f'<span style="font-size:13px;color:#cbd5e1;">{assignee}</span></div>'
         )
     else:
         assignee_html = '<span style="color:#CBD5E1;">—</span>'
@@ -136,7 +136,7 @@ def task_row(t, project_filter="", status_filter=""):
         f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
         f'<td style="padding:14px 12px;color:#94A3B8;font-size:12px;font-weight:600;white-space:nowrap;">#{tid}</td>'
         f'<td style="padding:14px 12px;min-width:220px;max-width:320px;">'
-        f'<div style="font-weight:500;font-size:14px;color:#0F172A;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
+        f'<div style="font-weight:500;font-size:14px;color:#e2e8f0;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
         f'</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
@@ -242,221 +242,385 @@ async def dashboard(request):
     else:
         nearest_text = "Активных дедлайнов нет"
 
-    html = f"""<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Executive Task Center</title>
-<style>
-*{{box-sizing:border-box;margin:0;padding:0;}}
-body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;background:#F0F4FA;color:#0F172A;min-height:100vh;}}
-.header{{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:white;padding:0 40px;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 4px 20px rgba(0,0,0,.3);position:sticky;top:0;z-index:50;}}
-.header-left h1{{font-size:18px;font-weight:700;letter-spacing:-.3px;}}
-.header-left p{{font-size:12px;opacity:.6;margin-top:2px;}}
-.header-right{{display:flex;align-items:center;gap:12px;}}
-.header-btn{{padding:7px 16px;border-radius:20px;font-size:13px;font-weight:500;text-decoration:none;transition:all .15s;}}
-.header-btn-ghost{{color:rgba(255,255,255,.8);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);}}
-.header-btn-ghost:hover{{background:rgba(255,255,255,.15);}}
-.header-btn-primary{{color:white;background:#3b82f6;border:none;}}
-.hero{{background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);color:white;padding:32px 40px;display:flex;align-items:center;justify-content:space-between;gap:32px;}}
-.hero-text h2{{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:10px;}}
-.hero-summary{{font-size:14px;opacity:.85;line-height:1.7;max-width:500px;}}
-.hero-circle{{flex-shrink:0;position:relative;width:110px;height:110px;}}
-.hero-circle svg{{transform:rotate(-90deg);}}
-.hero-circle-text{{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}}
-.hero-circle-text .pct{{font-size:24px;font-weight:800;}}
-.hero-circle-text .lbl{{font-size:10px;opacity:.7;margin-top:2px;}}
-.main{{padding:28px 40px;}}
-.kpi-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:28px;}}
-.kpi-card{{background:white;border-radius:20px;padding:20px 22px;box-shadow:0 2px 12px rgba(0,0,0,.05);position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:default;}}
-.kpi-card:hover{{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1);}}
-.kpi-accent{{position:absolute;top:0;left:0;right:0;height:3px;border-radius:20px 20px 0 0;}}
-.kpi-icon{{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}}
-.kpi-num{{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;}}
-.kpi-label{{font-size:12px;color:#64748B;margin-top:4px;font-weight:500;}}
-.kpi-sub{{font-size:11px;color:#94A3B8;margin-top:6px;}}
-.progress-card{{background:white;border-radius:20px;padding:22px 28px;box-shadow:0 2px 12px rgba(0,0,0,.05);margin-bottom:28px;}}
-.progress-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}}
-.progress-header span{{font-size:14px;font-weight:600;color:#0F172A;}}
-.progress-header .pct{{font-size:22px;font-weight:800;color:#3b82f6;}}
-.bar-bg{{background:#F1F5F9;border-radius:999px;height:10px;overflow:hidden;}}
-.bar-fill{{height:100%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#6366f1);transition:width .6s ease;}}
-.bar-dots{{display:flex;gap:16px;margin-top:12px;}}
-.bar-dot{{display:flex;align-items:center;gap:5px;font-size:12px;color:#64748B;}}
-.bar-dot-circle{{width:8px;height:8px;border-radius:50%;}}
-.controls{{background:white;border-radius:20px;padding:16px 20px;box-shadow:0 2px 12px rgba(0,0,0,.05);margin-bottom:20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;}}
-.project-pill{{padding:7px 16px;border-radius:20px;font-size:13px;font-weight:600;text-decoration:none;transition:all .15s;border:1.5px solid transparent;}}
-.project-pill-active{{background:#0f172a;color:white;border-color:#0f172a;}}
-.project-pill-inactive{{background:#F8FAFC;color:#475569;border-color:#E2E8F0;}}
-.project-pill-inactive:hover{{border-color:#CBD5E1;background:#F1F5F9;}}
-.search-wrap{{position:relative;flex:1;min-width:220px;}}
-.search-wrap input{{width:100%;padding:9px 14px 9px 38px;border:1.5px solid #E2E8F0;border-radius:20px;font-size:13px;background:#F8FAFC;outline:none;transition:all .15s;}}
-.search-wrap input:focus{{border-color:#3b82f6;background:white;box-shadow:0 0 0 3px #3b82f620;}}
-.search-wrap::before{{content:"🔍";position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;}}
-select{{padding:8px 14px;border:1.5px solid #E2E8F0;border-radius:20px;font-size:13px;background:#F8FAFC;cursor:pointer;outline:none;color:#374151;}}
-.btn-reset{{padding:8px 16px;background:#F1F5F9;color:#64748B;border:none;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;transition:all .15s;}}
-.btn-reset:hover{{background:#E2E8F0;}}
-.table-card{{background:white;border-radius:20px;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;}}
-.table-card table{{width:100%;border-collapse:collapse;}}
-.table-card thead th{{padding:13px 14px;text-align:left;font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.07em;background:#F8FAFC;border-bottom:1px solid #F1F5F9;position:sticky;top:64px;z-index:10;}}
-.table-card tbody tr{{border-bottom:1px solid #F8FAFC;transition:background .1s;}}
-.empty-state{{text-align:center;padding:60px 20px;}}
-.empty-state .icon{{font-size:48px;margin-bottom:16px;opacity:.4;}}
-.empty-state p{{color:#94A3B8;font-size:15px;}}
-@media(max-width:768px){{
-.header{{padding:0 20px;}}
-.hero{{flex-direction:column;padding:24px 20px;}}
-.hero-circle{{display:none;}}
-.main{{padding:20px;}}
-.kpi-grid{{grid-template-columns:repeat(2,1fr);}}
-.table-card table thead{{display:none;}}
-.table-card table tr{{display:block;margin-bottom:12px;border-radius:12px;border:1px solid #F1F5F9;}}
-.table-card table td{{display:flex;justify-content:space-between;padding:10px 14px;font-size:13px;border:none;border-bottom:1px solid #F8FAFC;}}
-.table-card table td:last-child{{border:none;}}
-}}
-</style>
-</head>
-<body>
+    # compute all stats
+    all_tasks_full = get_tasks()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    total_all = len(all_tasks_full)
+    open_all  = sum(1 for t in all_tasks_full if t["status"] in ("Открыта","В работе","На согласовании"))
+    done_all  = sum(1 for t in all_tasks_full if t["status"] == "Выполнена")
+    over_all  = sum(1 for t in all_tasks_full if t["status"] != "Выполнена" and t.get("deadline","") and t["deadline"] < today_str)
+    today_dl  = sum(1 for t in all_tasks_full if t.get("deadline") == today_str and t["status"] != "Выполнена")
+    pct_all   = round(done_all/total_all*100) if total_all else 0
+    health    = max(0, 100 - over_all*15 - today_dl*5)
+    execution = min(100, round(done_all/total_all*100)+50) if total_all else 50
+    productivity = min(100, 100 - over_all*10)
+    risk_label = "Low" if over_all==0 else ("Medium" if over_all<=2 else "High")
+    risk_color = "#10B981" if risk_label=="Low" else ("#F59E0B" if risk_label=="Medium" else "#EF4444")
+    future_dl = sorted([t["deadline"] for t in all_tasks_full if t.get("deadline","") > today_str and t["status"] != "Выполнена"])
+    if future_dl:
+        try:
+            days_nearest = (date.fromisoformat(future_dl[0]) - date.today()).days
+            nearest_text = f"ближайший дедлайн через {days_nearest} дн."
+        except Exception:
+            nearest_text = ""
+    else:
+        nearest_text = "нет активных дедлайнов"
+    hero_parts = [
+        "Просрочек нет ✓" if over_all==0 else f"{over_all} просрочено",
+        f"{open_all} задач в работе", f"{done_all} выполнено", nearest_text
+    ]
+    hero_summary = " &nbsp;·&nbsp; ".join(hero_parts)
+    attention_rows = ""
+    attention_count = 0
+    for tt in all_tasks_full:
+        if tt.get("deadline") == today_str and tt["status"] != "Выполнена":
+            attention_rows += f'<div class="att-row att-urgent"><span class="att-icon">⏰</span><span class="att-text">Дедлайн сегодня: <b>{tt["title"][:55]}</b></span><span class="att-who">{tt.get("assignee") or "—"}</span></div>'
+            attention_count += 1
+    for tt in all_tasks_full:
+        if tt.get("deadline","") and tt["deadline"] < today_str and tt["status"] != "Выполнена":
+            attention_rows += f'<div class="att-row att-over"><span class="att-icon">🔴</span><span class="att-text">Просрочена: <b>{tt["title"][:55]}</b></span><span class="att-who">{tt.get("assignee") or "—"}</span></div>'
+            attention_count += 1
+    for tt in all_tasks_full:
+        if tt["status"] != "Выполнена":
+            cmts = get_task_comments(tt["id"])
+            if not cmts:
+                attention_rows += f'<div class="att-row att-info"><span class="att-icon">💬</span><span class="att-text">Нет комментариев: <b>{tt["title"][:55]}</b></span><span class="att-who">{tt.get("assignee") or "—"}</span></div>'
+                attention_count += 1
+                if attention_count >= 8:
+                    break
+    if not attention_rows:
+        attention_rows = '<div class="att-empty"><span style="font-size:24px;">✅</span><p>Критичных задач нет. Все процессы под контролем.</p></div>'
+    workload = {}
+    for tt in all_tasks_full:
+        if tt["status"] not in ("Выполнена",) and tt.get("assignee"):
+            workload[tt["assignee"]] = workload.get(tt["assignee"], 0) + 1
+    workload_sorted = sorted(workload.items(), key=lambda x: -x[1])[:5]
+    upcoming = sorted([t for t in all_tasks_full if t.get("deadline","") >= today_str and t["status"] != "Выполнена"], key=lambda x: x.get("deadline",""))[:5]
+    project_pills = ""
+    for p in projects:
+        pc = get_project_color(p["name"])
+        is_active = p["name"] == selected
+        if is_active:
+            project_pills += f'<a href="/?project={p["name"]}" class="pill pill-active" style="background:{pc["text"]};color:white;border-color:{pc["text"]};">{p["name"]}</a>'
+        else:
+            project_pills += f'<a href="/?project={p["name"]}" class="pill" style="color:{pc["text"]};border-color:{pc["border"]}40;">{p["name"]}</a>'
+    st_open = sum(1 for t in tasks if t["status"] == "Открыта")
+    st_work = sum(1 for t in tasks if t["status"] == "В работе")
+    st_done = sum(1 for t in tasks if t["status"] == "Выполнена")
+    st_over = sum(1 for t in tasks if t["status"] != "Выполнена" and t.get("deadline","") and t["deadline"] < today_str)
+    if over_all == 0 and today_dl == 0:
+        ai_text = f"Система стабильна. Просрочек нет. {open_all} задач активны. Следующий дедлайн: {future_dl[0] if future_dl else 'не указан'}."
+    elif over_all > 0:
+        ai_text = f"Требуется внимание: {over_all} задач просрочено. {done_all} из {total_all} выполнено. Рекомендую провести ревью."
+    else:
+        ai_text = f"Сегодня {today_dl} задач с дедлайном. {open_all} в работе. Риск: {risk_label}."
+    workload_html = "".join(
+        f'<div class="workload-row"><div class="wl-name">{name.split()[0]}</div><div class="wl-bar-bg"><div class="wl-bar-fill" style="width:{min(100,cnt*20)}%;"></div></div><div class="wl-count">{cnt}</div></div>'
+        for name, cnt in workload_sorted
+    ) if workload_sorted else '<div style="font-size:12px;color:var(--muted);">Нет данных</div>'
+    upcoming_html = ""
+    for t in upcoming:
+        try:
+            mon = MONTHS_RU.get(int(t["deadline"][5:7]), "")[:3]
+        except Exception:
+            mon = ""
+        upcoming_html += f'<div class="sb-deadline"><div class="sb-dl-date"><div class="day">{t["deadline"][8:]}</div><div class="mon">{mon}</div></div><div class="sb-dl-info"><div class="title">{t["title"][:38]}</div><div class="who">{t.get("assignee") or "—"}</div></div></div>'
+    if not upcoming_html:
+        upcoming_html = '<div style="font-size:12px;color:var(--muted);">Нет предстоящих дедлайнов</div>'
+    pill_all_class = "pill pill-active" if not selected else "pill"
+    empty_row = '<tr><td colspan="8"><div class="empty-state"><div style="font-size:40px;margin-bottom:12px;">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'
+    health_label = "Отлично" if health >= 90 else ("Хорошо" if health >= 70 else "Под угрозой")
+    health_c = "#10B981" if health >= 80 else ("#F59E0B" if health >= 60 else "#EF4444")
 
-<div class="header">
-  <div class="header-left">
-    <h1>Executive Task Center</h1>
-    <p>Контроль задач, сроков и исполнения</p>
-  </div>
-  <div class="header-right">
-    <a href="/calendar" class="header-btn header-btn-ghost">📅 Календарь</a>
-    <a href="/newtask" class="header-btn header-btn-primary">+ Задача</a>
-  </div>
-</div>
+    html = (
+        "<!DOCTYPE html>\n<html lang=\"ru\">\n<head>\n"
+        "<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\">\n"
+        "<title>Executive Command Center</title>\n"
+        "<style>\n"
+        ":root{--navy:#0a0f1e;--accent:#3b82f6;--red:#ef4444;--emerald:#10b981;--amber:#f59e0b;--purple:#8b5cf6;--muted:#94a3b8;--border:rgba(255,255,255,.08);--card-bg:rgba(255,255,255,.04);}\n"
+        "*{box-sizing:border-box;margin:0;padding:0;}\n"
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;background:#0a0f1e;color:#f1f5f9;min-height:100vh;}\n"
+        ".topbar{background:rgba(10,15,30,.96);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}\n"
+        ".topbar-brand{display:flex;align-items:center;gap:12px;}\n"
+        ".logo{width:32px;height:32px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}\n"
+        ".topbar-brand h1{font-size:14px;font-weight:700;letter-spacing:.5px;color:white;}\n"
+        ".topbar-brand p{font-size:11px;color:var(--muted);margin-top:1px;}\n"
+        ".topbar-right{display:flex;align-items:center;gap:8px;}\n"
+        ".tb-btn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;border:none;transition:all .2s;letter-spacing:.3px;}\n"
+        ".tb-ghost{color:var(--muted);background:transparent;border:1px solid var(--border);}\n"
+        ".tb-ghost:hover{color:white;background:var(--card-bg);}\n"
+        ".tb-blue{color:white;background:var(--accent);}\n"
+        ".tb-blue:hover{background:#2563eb;}\n"
+        ".hero{position:relative;overflow:hidden;padding:36px 32px;background:linear-gradient(135deg,#0a0f1e 0%,#0f1f3d 60%,#0a0f1e 100%);border-bottom:1px solid var(--border);}\n"
+        ".hero::before{content:\'\';position:absolute;top:-80px;right:-40px;width:320px;height:320px;background:radial-gradient(circle,rgba(239,68,68,.1) 0%,transparent 70%);pointer-events:none;}\n"
+        ".hero::after{content:\'\';position:absolute;bottom:-60px;left:35%;width:400px;height:260px;background:radial-gradient(circle,rgba(59,130,246,.07) 0%,transparent 70%);pointer-events:none;}\n"
+        ".redline{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#ef4444 30%,#3b82f6 70%,transparent);}\n"
+        ".hero-inner{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;}\n"
+        ".eyebrow{font-size:10px;font-weight:700;letter-spacing:2px;color:#ef4444;text-transform:uppercase;margin-bottom:6px;}\n"
+        ".hero-h2{font-size:26px;font-weight:800;letter-spacing:-1px;background:linear-gradient(135deg,#fff 60%,#94a3b8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}\n"
+        ".hero-sub{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.8;}\n"
+        ".scores{display:flex;gap:10px;flex-wrap:wrap;}\n"
+        ".score{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 16px;text-align:center;min-width:80px;transition:transform .2s;}\n"
+        ".score:hover{transform:translateY(-2px);}\n"
+        ".score .val{font-size:20px;font-weight:800;}\n"
+        ".score .lbl{font-size:10px;color:var(--muted);margin-top:2px;letter-spacing:.4px;}\n"
+        ".ai-card{margin:20px 32px;background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.18);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}\n"
+        ".ai-icon{width:38px;height:38px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}\n"
+        ".ai-text{flex:1;font-size:13px;color:#cbd5e1;line-height:1.5;}\n"
+        ".ai-text strong{color:white;}\n"
+        ".ai-acts{display:flex;gap:7px;flex-wrap:wrap;}\n"
+        ".ai-btn{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#cbd5e1;text-decoration:none;transition:all .15s;}\n"
+        ".ai-btn:hover{background:rgba(255,255,255,.1);color:white;}\n"
+        ".page{display:grid;grid-template-columns:1fr 280px;gap:0;}\n"
+        ".content{padding:22px 32px;}\n"
+        ".sidebar{padding:22px 16px 22px 0;border-left:1px solid var(--border);}\n"
+        ".kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;}\n"
+        ".kpi{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s;cursor:default;}\n"
+        ".kpi:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.14);box-shadow:0 10px 28px rgba(0,0,0,.4);}\n"
+        ".kpi-top{position:absolute;top:0;left:0;right:0;height:2px;}\n"
+        ".kpi-icon{font-size:18px;margin-bottom:8px;}\n"
+        ".kpi-num{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1;}\n"
+        ".kpi-label{font-size:11px;color:var(--muted);margin-top:3px;font-weight:500;}\n"
+        ".kpi-sub{font-size:10px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);opacity:.7;}\n"
+        ".prog-card{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:18px;}\n"
+        ".prog-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}\n"
+        ".prog-title{font-size:13px;font-weight:600;color:white;}\n"
+        ".prog-insight{font-size:11px;color:#64748b;margin-top:3px;}\n"
+        ".prog-pct{font-size:26px;font-weight:800;color:var(--accent);}\n"
+        ".bar-bg{background:rgba(255,255,255,.06);border-radius:999px;height:7px;overflow:hidden;margin-bottom:10px;}\n"
+        ".bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#6366f1,#8b5cf6);animation:fb .8s ease;}\n"
+        "@keyframes fb{from{width:0%}}\n"
+        ".sdots{display:flex;gap:14px;flex-wrap:wrap;}\n"
+        ".sdot{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);}\n"
+        ".sdot-c{width:7px;height:7px;border-radius:50%;flex-shrink:0;}\n"
+        ".att-card{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:18px;}\n"
+        ".att-title{font-size:13px;font-weight:700;color:white;margin-bottom:10px;display:flex;align-items:center;gap:8px;}\n"
+        ".att-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;}\n"
+        ".att-row:last-child{border-bottom:none;}\n"
+        ".att-icon{font-size:13px;flex-shrink:0;}\n"
+        ".att-text{flex:1;color:#cbd5e1;}\n"
+        ".att-text b{color:white;}\n"
+        ".att-who{font-size:11px;color:var(--muted);white-space:nowrap;}\n"
+        ".att-urgent,.att-over{border-left:2px solid #ef4444;padding-left:9px;margin-left:-9px;}\n"
+        ".att-info{border-left:2px solid #3b82f6;padding-left:9px;margin-left:-9px;}\n"
+        ".att-empty{text-align:center;padding:18px;color:var(--muted);font-size:13px;}\n"
+        ".att-empty p{margin-top:6px;}\n"
+        ".ctrl-bar{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}\n"
+        ".pill{padding:5px 13px;border-radius:20px;font-size:12px;font-weight:500;text-decoration:none;border:1px solid var(--border);color:var(--muted);background:transparent;transition:all .15s;white-space:nowrap;}\n"
+        ".pill:hover{color:white;border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.05);}\n"
+        ".pill-active{background:white!important;color:#0a0f1e!important;border-color:white!important;}\n"
+        ".srch{position:relative;flex:1;min-width:180px;}\n"
+        ".srch input{width:100%;padding:7px 12px 7px 32px;border:1px solid var(--border);border-radius:20px;font-size:12px;background:rgba(255,255,255,.04);color:white;outline:none;transition:all .15s;}\n"
+        ".srch input::placeholder{color:var(--muted);}\n"
+        ".srch input:focus{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.05);}\n"
+        ".srch-ico{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;opacity:.5;}\n"
+        "select{padding:6px 11px;border:1px solid var(--border);border-radius:20px;font-size:12px;background:rgba(255,255,255,.04);color:white;cursor:pointer;outline:none;}\n"
+        "select option{background:#1e293b;}\n"
+        ".btn-reset{padding:6px 13px;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;text-decoration:none;transition:all .15s;}\n"
+        ".btn-reset:hover{color:white;background:rgba(255,255,255,.05);}\n"
+        ".tbl-wrap{background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:14px;overflow:hidden;}\n"
+        ".tbl-wrap table{width:100%;border-collapse:collapse;}\n"
+        ".tbl-wrap thead th{padding:10px 13px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;background:rgba(255,255,255,.03);border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:60px;z-index:10;}\n"
+        ".task-row{border-bottom:1px solid rgba(255,255,255,.03);transition:background .1s;}\n"
+        ".task-row:hover{background:rgba(255,255,255,.03);}\n"
+        ".task-row td{padding:13px;vertical-align:middle;}\n"
+        ".act-btn{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;border:none;cursor:pointer;transition:all .15s;}\n"
+        ".row-acts{display:flex;gap:3px;opacity:0;transition:opacity .15s;}\n"
+        ".task-row:hover .row-acts{opacity:1;}\n"
+        ".empty-st{text-align:center;padding:50px;color:var(--muted);}\n"
+        ".sb-sec{margin-bottom:18px;padding:0 10px;}\n"
+        ".sb-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;}\n"
+        ".sb-dl{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--border);}\n"
+        ".sb-dl:last-child{border-bottom:none;}\n"
+        ".dl-date{width:34px;height:34px;background:rgba(59,130,246,.1);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;}\n"
+        ".dl-day{font-size:13px;font-weight:800;color:var(--accent);line-height:1;}\n"
+        ".dl-mon{font-size:9px;color:var(--muted);}\n"
+        ".dl-info .tl{font-size:12px;color:#e2e8f0;line-height:1.3;}\n"
+        ".dl-info .wh{font-size:11px;color:var(--muted);margin-top:1px;}\n"
+        ".wl-row{display:flex;align-items:center;gap:7px;margin-bottom:7px;}\n"
+        ".wl-name{font-size:11px;color:#cbd5e1;width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;}\n"
+        ".wl-bg{flex:1;background:rgba(255,255,255,.06);border-radius:999px;height:4px;overflow:hidden;}\n"
+        ".wl-fill{height:100%;background:linear-gradient(90deg,#3b82f6,#8b5cf6);border-radius:999px;}\n"
+        ".wl-cnt{font-size:11px;color:var(--muted);width:16px;text-align:right;}\n"
+        ".qa-btn{padding:8px 13px;border-radius:10px;font-size:12px;font-weight:500;text-decoration:none;border:1px solid var(--border);color:#cbd5e1;background:rgba(255,255,255,.03);transition:all .15s;display:flex;align-items:center;gap:7px;margin-bottom:5px;}\n"
+        ".qa-btn:hover{background:rgba(255,255,255,.07);color:white;border-color:rgba(255,255,255,.15);}\n"
+        ".cmd-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:flex-start;justify-content:center;padding-top:14vh;}\n"
+        ".cmd-ov.open{display:flex;}\n"
+        ".cmd-box{background:#1e293b;border:1px solid rgba(255,255,255,.14);border-radius:16px;width:540px;max-width:95vw;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.6);}\n"
+        ".cmd-inp{width:100%;padding:15px 18px;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);color:white;font-size:14px;outline:none;}\n"
+        ".cmd-inp::placeholder{color:var(--muted);}\n"
+        ".cmd-items{padding:6px;}\n"
+        ".cmd-item{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:8px;cursor:pointer;font-size:13px;color:#cbd5e1;transition:background .1s;}\n"
+        ".cmd-item:hover{background:rgba(255,255,255,.07);color:white;}\n"
+        ".more-dropdown{display:none;position:absolute;right:0;top:34px;background:#1e293b;border:1px solid rgba(255,255,255,.12);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:100;min-width:150px;padding:5px 0;}\n"
+        ".more-dropdown a{display:flex;align-items:center;gap:9px;padding:8px 14px;color:#cbd5e1;text-decoration:none;font-size:12px;}\n"
+        ".more-dropdown a:hover{background:rgba(255,255,255,.06);color:white;}\n"
+        "@media(max-width:1050px){.page{grid-template-columns:1fr;}.sidebar{display:none;}}\n"
+        "@media(max-width:680px){.hero-inner{flex-direction:column;}.scores{justify-content:center;}.content{padding:14px;}.kpi-grid{grid-template-columns:repeat(2,1fr);}.topbar{padding:0 14px;}.topbar-brand p{display:none;}.tbl-wrap table thead{display:none;}.task-row{display:block;margin:6px;border-radius:10px;border:1px solid var(--border);}.task-row td{display:flex;justify-content:space-between;align-items:center;padding:7px 11px;border-bottom:1px solid rgba(255,255,255,.04);}}\n"
+        "</style>\n"
+        "</head>\n<body>\n"
+    )
 
-<div class="hero">
-  <div class="hero-text">
-    <h2>Компания под контролем</h2>
-    <div class="hero-summary">
-      {overdue_text} &nbsp;·&nbsp; {all_stats['open']} задач в работе &nbsp;·&nbsp; {all_stats['done']} выполнено<br>{nearest_text}
-    </div>
-  </div>
-  <div class="hero-circle">
-    <svg width="110" height="110" viewBox="0 0 110 110">
-      <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="10"/>
-      <circle cx="55" cy="55" r="46" fill="none" stroke="white" stroke-width="10"
-        stroke-dasharray="{round(2*3.14159*46*all_stats['percent']/100)} {round(2*3.14159*46)}"
-        stroke-linecap="round"/>
-    </svg>
-    <div class="hero-circle-text">
-      <span class="pct">{all_stats['percent']}%</span>
-      <span class="lbl">готово</span>
-    </div>
-  </div>
-</div>
+    # topbar
+    html += (
+        "<div class=\"topbar\">\n"
+        "  <div class=\"topbar-brand\"><div class=\"logo\">⚡</div><div>"
+        "<h1>EXECUTIVE COMMAND CENTER</h1>"
+        "<p>Контроль задач, сроков и исполнения</p>"
+        "</div></div>\n"
+        "  <div class=\"topbar-right\">"
+        "<a href=\"/calendar\" class=\"tb-btn tb-ghost\">📅 Календарь</a>"
+        "<a href=\"/newtask\" class=\"tb-btn tb-blue\">+ Задача</a>"
+        "<button class=\"tb-btn tb-ghost\" onclick=\"openCmd()\" title=\"Ctrl+K\">⌘K</button>"
+        "</div>\n</div>\n"
+    )
 
-<div class="main">
+    # hero
+    html += (
+        "<div class=\"hero\"><div class=\"redline\"></div>\n"
+        "<div class=\"hero-inner\">\n"
+        "  <div>\n"
+        f"    <div class=\"eyebrow\">Command Center · Live</div>\n"
+        f"    <div class=\"hero-h2\">Компания под контролем</div>\n"
+        f"    <div class=\"hero-sub\">{hero_summary}</div>\n"
+        "  </div>\n"
+        "  <div class=\"scores\">\n"
+        f"    <div class=\"score\"><div class=\"val\" style=\"color:{health_c};\">{health}%</div><div class=\"lbl\">Health</div></div>\n"
+        f"    <div class=\"score\"><div class=\"val\" style=\"color:#3b82f6;\">{execution}%</div><div class=\"lbl\">Execution</div></div>\n"
+        f"    <div class=\"score\"><div class=\"val\" style=\"color:#8b5cf6;\">{productivity}%</div><div class=\"lbl\">Productivity</div></div>\n"
+        f"    <div class=\"score\"><div class=\"val\" style=\"color:{risk_color};\">{risk_label}</div><div class=\"lbl\">Risk</div></div>\n"
+        "  </div>\n"
+        "</div>\n</div>\n"
+    )
 
-<div class="kpi-grid">
-  <div class="kpi-card">
-    <div class="kpi-accent" style="background:#3b82f6;"></div>
-    <div class="kpi-icon" style="background:#EFF6FF;">📋</div>
-    <div class="kpi-num" style="color:#0F172A;">{all_stats['total']}</div>
-    <div class="kpi-label">Всего задач</div>
-    <div class="kpi-sub">Все проекты</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-accent" style="background:#f59e0b;"></div>
-    <div class="kpi-icon" style="background:#FFFBEB;">⚡</div>
-    <div class="kpi-num" style="color:#D97706;">{all_stats['open']}</div>
-    <div class="kpi-label">В работе</div>
-    <div class="kpi-sub">Активных</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-accent" style="background:#10b981;"></div>
-    <div class="kpi-icon" style="background:#ECFDF5;">✅</div>
-    <div class="kpi-num" style="color:#059669;">{all_stats['done']}</div>
-    <div class="kpi-label">Выполнено</div>
-    <div class="kpi-sub">{all_stats['percent']}% прогресс</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-accent" style="background:#ef4444;"></div>
-    <div class="kpi-icon" style="background:#FEF2F2;">🔴</div>
-    <div class="kpi-num" style="color:#DC2626;">{all_stats['overdue']}</div>
-    <div class="kpi-label">Просрочено</div>
-    <div class="kpi-sub">{"Всё под контролем" if all_stats['overdue']==0 else "Требует внимания"}</div>
-  </div>
-  <div class="kpi-card">
-    <div class="kpi-accent" style="background:#8b5cf6;"></div>
-    <div class="kpi-icon" style="background:#F5F3FF;">📅</div>
-    <div class="kpi-num" style="color:#7C3AED;">{today_deadline}</div>
-    <div class="kpi-label">Дедлайн сегодня</div>
-    <div class="kpi-sub">{"Нет срочных" if today_deadline==0 else "Срочно!"}</div>
-  </div>
-</div>
+    # ai card
+    html += (
+        "<div class=\"ai-card\">\n"
+        "  <div class=\"ai-icon\">🤖</div>\n"
+        f"  <div class=\"ai-text\"><strong>AI Executive:</strong> {ai_text}</div>\n"
+        "  <div class=\"ai-acts\">"
+        "<a href=\"/?status=Просрочена\" class=\"ai-btn\">⚠️ Внимание</a>"
+        "<a href=\"/\" class=\"ai-btn\">📊 Отчет</a>"
+        "</div>\n</div>\n"
+    )
 
-<div class="progress-card">
-  <div class="progress-header">
-    <span>📊 Прогресс: {title}</span>
-    <span class="pct">{stats['percent']}%</span>
-  </div>
-  <div class="bar-bg">
-    <div class="bar-fill" style="width:{stats['percent']}%;"></div>
-  </div>
-  <div class="bar-dots">
-    <div class="bar-dot"><div class="bar-dot-circle" style="background:#3b82f6;"></div>Открыто: {sum(1 for t in tasks if t['status']=='Открыта')}</div>
-    <div class="bar-dot"><div class="bar-dot-circle" style="background:#f59e0b;"></div>В работе: {sum(1 for t in tasks if t['status']=='В работе')}</div>
-    <div class="bar-dot"><div class="bar-dot-circle" style="background:#10b981;"></div>Выполнено: {stats['done']}</div>
-    <div class="bar-dot"><div class="bar-dot-circle" style="background:#ef4444;"></div>Просрочено: {stats['overdue']}</div>
-  </div>
-</div>
+    # page layout
+    html += "<div class=\"page\">\n<div class=\"content\">\n"
 
-{attention_html}
+    # kpi
+    kpi_items = [
+        ("linear-gradient(90deg,#3b82f6,#6366f1)", "📋", str(total_all), "white", "Всего задач", "Все проекты"),
+        ("linear-gradient(90deg,#f59e0b,#f97316)", "⚡", str(open_all), "#f59e0b", "В работе", "Активных"),
+        ("linear-gradient(90deg,#10b981,#06b6d4)", "✅", str(done_all), "#10b981", "Выполнено", f"{pct_all}% прогресс"),
+        ("linear-gradient(90deg,#ef4444,#dc2626)", "🔴", str(over_all), "#ef4444", "Просрочено", "Всё ок" if over_all==0 else "Внимание!"),
+        ("linear-gradient(90deg,#8b5cf6,#a78bfa)", "📅", str(today_dl), "#8b5cf6", "Дедлайн сегодня", "Нет срочных" if today_dl==0 else "Срочно!"),
+        ("linear-gradient(90deg,#06b6d4,#3b82f6)", "💎", f"{health}%", "#06b6d4", "Health Score", health_label),
+    ]
+    html += "<div class=\"kpi-grid\">\n"
+    for grad, icon, num, color, label, sub in kpi_items:
+        html += f"  <div class=\"kpi\"><div class=\"kpi-top\" style=\"background:{grad};\"></div><div class=\"kpi-icon\">{icon}</div><div class=\"kpi-num\" style=\"color:{color};\">{num}</div><div class=\"kpi-label\">{label}</div><div class=\"kpi-sub\">{sub}</div></div>\n"
+    html += "</div>\n"
 
-<div class="controls">
-  <a href="/" class="project-pill {"project-pill-active" if not selected else "project-pill-inactive"}">Все проекты</a>
-  {project_buttons}
-  <form method="get" style="display:contents;">
-    <input type="hidden" name="project" value="{selected}">
-    <input type="hidden" name="status" value="{status_filter}">
-    <div class="search-wrap">
-      <input type="text" name="q" value="{search_value}" placeholder="Поиск по ID, названию, ответственному..." oninput="clearTimeout(this._t);this._t=setTimeout(()=>this.form.submit(),400)">
-    </div>
-  </form>
-  <form method="get" style="display:contents;">
-    <input type="hidden" name="project" value="{selected}">
-    <input type="hidden" name="q" value="{search_value}">
-    <select name="status" onchange="this.form.submit()">
-      <option value="">Все статусы</option>{status_options}
-    </select>
-  </form>
-  <a href="/" class="btn-reset">Сбросить</a>
-</div>
+    # progress
+    html += (
+        "<div class=\"prog-card\">\n"
+        "  <div class=\"prog-head\">\n"
+        f"    <div><div class=\"prog-title\">📊 Прогресс: {title}</div>"
+        f"<div class=\"prog-insight\">Выполнено {st_done} из {stats['total']} задач{'.' if over_all==0 else f'. Просрочено: {over_all}.'}</div></div>\n"
+        f"    <div class=\"prog-pct\">{stats['percent']}%</div>\n"
+        "  </div>\n"
+        f"  <div class=\"bar-bg\"><div class=\"bar-fill\" style=\"width:{stats['percent']}%;\"></div></div>\n"
+        "  <div class=\"sdots\">\n"
+        f"    <div class=\"sdot\"><div class=\"sdot-c\" style=\"background:#3b82f6;\"></div>Открыто: {st_open}</div>\n"
+        f"    <div class=\"sdot\"><div class=\"sdot-c\" style=\"background:#f59e0b;\"></div>В работе: {st_work}</div>\n"
+        f"    <div class=\"sdot\"><div class=\"sdot-c\" style=\"background:#10b981;\"></div>Выполнено: {st_done}</div>\n"
+        f"    <div class=\"sdot\"><div class=\"sdot-c\" style=\"background:#ef4444;\"></div>Просрочено: {st_over}</div>\n"
+        "  </div>\n</div>\n"
+    )
 
-<div class="table-card">
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th><th>Задача</th><th>Ответственный</th><th>Проект</th>
-        <th>Срок</th><th>Статус</th><th>Комментарий</th><th>Действия</th>
-      </tr>
-    </thead>
-    <tbody>{rows if rows else '<tr><td colspan="8"><div class="empty-state"><div class="icon">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'}</tbody>
-  </table>
-</div>
+    # attention
+    html += (
+        "<div class=\"att-card\">\n"
+        f"  <div class=\"att-title\">⚠️ Требует внимания "
+        f"<span style=\"background:rgba(239,68,68,.15);color:#ef4444;padding:2px 8px;border-radius:10px;font-size:10px;\">{attention_count}</span></div>\n"
+        f"  {attention_rows}\n"
+        "</div>\n"
+    )
 
-</div>
+    # controls
+    all_pill = "pill pill-active" if not selected else "pill"
+    html += (
+        "<div class=\"ctrl-bar\">\n"
+        f"  <a href=\"/\" class=\"{all_pill}\">Все проекты</a>\n"
+        f"  {project_pills}\n"
+        "  <form method=\"get\" style=\"display:contents;\">\n"
+        f"    <input type=\"hidden\" name=\"project\" value=\"{selected}\">\n"
+        f"    <input type=\"hidden\" name=\"status\" value=\"{status_filter}\">\n"
+        "    <div class=\"srch\"><span class=\"srch-ico\">🔍</span>"
+        f"<input type=\"text\" name=\"q\" value=\"{search_value}\" placeholder=\"Поиск по ID, названию, ответственному...\" oninput=\"clearTimeout(this._t);this._t=setTimeout(()=>this.form.submit(),400)\"></div>\n"
+        "  </form>\n"
+        "  <form method=\"get\" style=\"display:contents;\">\n"
+        f"    <input type=\"hidden\" name=\"project\" value=\"{selected}\">\n"
+        f"    <input type=\"hidden\" name=\"q\" value=\"{search_value}\">\n"
+        f"    <select name=\"status\" onchange=\"this.form.submit()\"><option value=\"\">Все статусы</option>{status_options}</select>\n"
+        "  </form>\n"
+        "  <a href=\"/\" class=\"btn-reset\">Сбросить</a>\n"
+        "</div>\n"
+    )
 
-<script>
-function toggleMenu(btn) {{
-  var menu = btn.nextElementSibling;
-  var allMenus = document.querySelectorAll('.more-dropdown');
-  allMenus.forEach(function(m) {{ if(m !== menu) m.style.display = 'none'; }});
-  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-  event.stopPropagation();
-}}
-document.addEventListener('click', function() {{
-  document.querySelectorAll('.more-dropdown').forEach(function(m) {{ m.style.display = 'none'; }});
-}});
-</script>
-</body>
-</html>"""
+    # table
+    table_body = rows if rows else '<tr><td colspan="8"><div class="empty-st"><div style="font-size:36px;margin-bottom:10px;">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'
+    html += (
+        "<div class=\"tbl-wrap\">\n<table>\n"
+        "<thead><tr><th>ID</th><th>Задача</th><th>Ответственный</th><th>Проект</th>"
+        "<th>Срок</th><th>Статус</th><th>Комментарии</th><th>Действия</th></tr></thead>\n"
+        f"<tbody>{table_body}</tbody>\n</table>\n</div>\n"
+    )
+
+    html += "</div>\n"  # /content
+
+    # sidebar
+    html += (
+        "<div class=\"sidebar\">\n"
+        "<div class=\"sb-sec\"><div class=\"sb-title\">Ближайшие дедлайны</div>\n"
+        f"{upcoming_html}</div>\n"
+        "<div class=\"sb-sec\"><div class=\"sb-title\">Нагрузка команды</div>\n"
+        f"{workload_html}</div>\n"
+        "<div class=\"sb-sec\"><div class=\"sb-title\">Быстрые действия</div>\n"
+        "<a href=\"/newtask\" class=\"qa-btn\">➕ Создать задачу</a>\n"
+        "<a href=\"/calendar\" class=\"qa-btn\">📅 Календарь</a>\n"
+        "<a href=\"/?status=Просрочена\" class=\"qa-btn\">🔴 Просроченные</a>\n"
+        "<a href=\"/?status=Открыта\" class=\"qa-btn\">🔵 Открытые</a>\n"
+        "</div>\n</div>\n"
+    )
+
+    html += "</div>\n"  # /page
+
+    # command palette
+    html += (
+        "<div class=\"cmd-ov\" id=\"cmdOv\" onclick=\"if(event.target===this)closeCmd()\">\n"
+        "  <div class=\"cmd-box\">\n"
+        "    <input class=\"cmd-inp\" id=\"cmdIn\" placeholder=\"Поиск задач, действий...\" oninput=\"filterCmd(this.value)\" autocomplete=\"off\">\n"
+        "    <div class=\"cmd-items\" id=\"cmdIt\">\n"
+        "      <div class=\"cmd-item\" onclick=\"location='/'\" >📋 Все задачи</div>\n"
+        "      <div class=\"cmd-item\" onclick=\"location='/newtask'\" >➕ Создать задачу</div>\n"
+        "      <div class=\"cmd-item\" onclick=\"location='/calendar'\" >📅 Открыть календарь</div>\n"
+        "      <div class=\"cmd-item\" onclick=\"location='/?status=Просрочена'\" >🔴 Просроченные задачи</div>\n"
+        "      <div class=\"cmd-item\" onclick=\"location='/?status=Открыта'\" >🔵 Открытые задачи</div>\n"
+        "      <div class=\"cmd-item\" onclick=\"location='/?status=Выполнена'\" >✅ Выполненные</div>\n"
+        "    </div>\n  </div>\n</div>\n"
+    )
+
+    html += (
+        "<script>\n"
+        "function openCmd(){document.getElementById('cmdOv').classList.add('open');document.getElementById('cmdIn').focus();}\n"
+        "function closeCmd(){document.getElementById('cmdOv').classList.remove('open');}\n"
+        "document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openCmd();}if(e.key==='Escape')closeCmd();});\n"
+        "function filterCmd(v){document.querySelectorAll('#cmdIt .cmd-item').forEach(function(el){el.style.display=v&&!el.textContent.toLowerCase().includes(v.toLowerCase())?'none':'';});}\n"
+        "function toggleMenu(btn){var m=btn.nextElementSibling;document.querySelectorAll('.more-dropdown').forEach(function(d){if(d!==m)d.style.display='none';});m.style.display=m.style.display==='block'?'none':'block';event.stopPropagation();}\n"
+        "document.addEventListener('click',function(){document.querySelectorAll('.more-dropdown').forEach(function(m){m.style.display='none';});});\n"
+        "</script>\n</body>\n</html>"
+    )
 
     return web.Response(text=html, content_type="text/html")
 
