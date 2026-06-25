@@ -486,10 +486,34 @@ async def add_file_start(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+
+
+# ─── Выбор задачи для прикрепления файла ──────────────────────────────────
+@router.callback_query(F.data.startswith("attach_pick_"))
+async def attach_pick_task(callback: CallbackQuery, state: FSMContext):
+    task_id = int(callback.data.replace("attach_pick_", ""))
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        await callback.answer("Задача не найдена")
+        return
+    await state.update_data(commenting_task_id=task_id)
+    await state.set_state(TaskCommenting.waiting_for_file)
+    title = task["title"][:60] + "..." if len(task["title"]) > 60 else task["title"]
+    await callback.message.edit_text(
+        f"📎 Прикрепляем файл к задаче *#{task_id}:*\n_{title}_\n\nОтправьте файл, фото или видео:",
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
 @router.message(TaskCommenting.waiting_for_file)
 async def save_file(message: Message, state: FSMContext):
     data = await state.get_data()
     task_id = data.get("commenting_task_id")
+    if not task_id:
+        await message.answer("❌ Задача не выбрана. Используйте /attach для прикрепления файла.")
+        await state.clear()
+        return
     with get_conn() as conn:
         user = conn.execute(
             "SELECT * FROM users WHERE telegram_id=?",
@@ -517,7 +541,14 @@ async def save_file(message: Message, state: FSMContext):
         return
     add_task_comment(task_id=task_id, author=author, text=caption, file_id=file_id, file_name=file_name, file_type=file_type)
     await state.clear()
-    await message.answer(f"✅ Файл *{file_name}* прикреплён к задаче #{task_id}!", parse_mode="Markdown")
+    from config import RAILWAY_PUBLIC_DOMAIN
+    dash_url = f"https://{RAILWAY_PUBLIC_DOMAIN}/attach/{task_id}" if RAILWAY_PUBLIC_DOMAIN else ""
+    link = f"\n[Посмотреть в дашборде]({dash_url})" if dash_url else ""
+    await message.answer(
+        f"✅ *{file_name}* прикреплён к задаче *#{task_id}*!{link}",
+        parse_mode="Markdown",
+        disable_web_page_preview=True
+    )
 
 
 # ─── История комментариев ──────────────────────────────────────────────────
@@ -771,24 +802,44 @@ async def etask_save_field(message: Message, state: FSMContext):
 @router.message(Command("attach"))
 async def cmd_attach(message: Message, state: FSMContext):
     parts = message.text.split()
-    if len(parts) < 2 or not parts[1].isdigit():
+    tasks = get_tasks()
+    # Если ID указан — прикрепляем сразу
+    if len(parts) >= 2 and parts[1].isdigit():
+        task_id = int(parts[1])
+        task = next((t for t in tasks if t["id"] == task_id), None)
+        if not task:
+            await message.answer(f"❌ Задача #{task_id} не найдена.")
+            return
+        await state.update_data(commenting_task_id=task_id)
+        await state.set_state(TaskCommenting.waiting_for_file)
+        title = task["title"][:60] + "..." if len(task["title"]) > 60 else task["title"]
         await message.answer(
-            "📎 Укажите ID задачи:\n"
-            "Например: /attach 15\n\n"
-            "ID задачи можно найти в дашборде или командой /tasks"
+            f"📎 Прикрепляем файл к задаче *#{task_id}:*\n_{title}_\n\nОтправьте файл, фото или видео:",
+            parse_mode="Markdown"
         )
         return
-    task_id = int(parts[1])
-    tasks = get_tasks()
-    task = next((t for t in tasks if t["id"] == task_id), None)
-    if not task:
-        await message.answer(f"❌ Задача #{task_id} не найдена.")
+    # Показываем список активных задач для выбора
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
+    my_name = user["name"] if user else ""
+    active = [t for t in tasks if t["status"] != "Выполнена"]
+    if my_name:
+        my_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
+        other_tasks = [t for t in active if t not in my_tasks]
+        show_tasks = my_tasks[:10] + other_tasks[:5]
+    else:
+        show_tasks = active[:15]
+    if not show_tasks:
+        await message.answer("📋 Нет активных задач.")
         return
-    await state.update_data(commenting_task_id=task_id)
-    await state.set_state(TaskCommenting.waiting_for_file)
-    title = task["title"][:60] + "..." if len(task["title"]) > 60 else task["title"]
+    buttons = []
+    for t in show_tasks:
+        short = t["title"][:45] + "…" if len(t["title"]) > 45 else t["title"]
+        buttons.append([InlineKeyboardButton(text=f"#{t['id']} {short}", callback_data=f"attach_pick_{t['id']}")])
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")])
     await message.answer(
-        f"📎 Прикрепляем файл к задаче *#{task_id}*:\n_{title}_\n\nОтправьте файл, фото или видео:",
+        "📎 *Выберите задачу для прикрепления файла:*",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
         parse_mode="Markdown"
     )
 
