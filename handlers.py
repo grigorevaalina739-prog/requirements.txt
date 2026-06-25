@@ -811,8 +811,8 @@ async def correct_deadline(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "correct_assignee", TaskCreation.confirming_multiple)
 async def correct_assignee(callback: CallbackQuery, state: FSMContext):
     await state.update_data(correcting="assignee")
-    await state.set_state(TaskCreation.correcting_field_multiple)
-    await callback.message.answer("👤 Введите ответственного:")
+    await state.set_state(TaskCreation.choosing_assignee)
+    await callback.message.answer("👤 Выберите ответственного:", reply_markup=managers_keyboard())
     await callback.answer()
 
 
@@ -869,6 +869,12 @@ async def edit_field(callback: CallbackQuery, state: FSMContext):
         await state.update_data(editing=field)
         await state.set_state(TaskCreation.choosing_project)
         await callback.message.answer("📁 Выберите проект:", reply_markup=projects_keyboard(projects))
+        await callback.answer()
+        return
+    if field == "assignee":
+        await state.update_data(editing=field)
+        await state.set_state(TaskCreation.choosing_assignee)
+        await callback.message.answer("👤 Выберите ответственного:", reply_markup=managers_keyboard())
         await callback.answer()
         return
     await state.update_data(editing=field)
@@ -1148,7 +1154,6 @@ async def choose_manager(callback: CallbackQuery, state: FSMContext):
     projects = get_projects()
 
     if callback.data == "mgr_manual":
-        # Ввод вручную
         await state.set_state(TaskCreation.editing_field)
         await state.update_data(editing="assignee")
         await callback.message.answer("✏️ Введите имя ответственного:")
@@ -1158,7 +1163,22 @@ async def choose_manager(callback: CallbackQuery, state: FSMContext):
     idx = int(callback.data.replace("mgr_", ""))
     assignee = MANAGERS[idx]
     parsed["assignee"] = assignee
-    await state.update_data(parsed=parsed)
+    editing = data.get("editing")
+    await state.update_data(parsed=parsed, editing=None)
+
+    # Если пришли из редактирования поля (кнопка в форме подтверждения)
+    if editing == "assignee":
+        await state.set_state(TaskCreation.confirming)
+        await callback.message.answer(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
+        await callback.answer()
+        return
+
+    # Если пришли из correcting_field_multiple (несколько задач)
+    if data.get("correcting") == "assignee":
+        await state.update_data(selected_assignee=assignee, correcting=None)
+        await show_multiple_preview(callback, state, edit=True)
+        await callback.answer()
+        return
 
     # Если проект не распознан — спрашиваем проект
     if not parsed.get("project") and projects:
@@ -1173,7 +1193,7 @@ async def choose_manager(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
-    # Сохраняем задачу
+    # Сохраняем задачу сразу
     project = parsed.get("project") or "Общие"
     task_id = add_task(
         project=project,
