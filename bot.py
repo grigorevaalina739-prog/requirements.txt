@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiohttp import web
 from config import BOT_TOKEN
 from handlers import router
-from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, auto_mark_overdue, escalate_overdue, weekly_digest
+from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, morning_briefing, auto_mark_overdue, escalate_overdue, weekly_digest
 from database import init_db
 from dashboard import create_app
 
@@ -28,6 +28,9 @@ async def main():
     
     # Напоминание за 1 день — каждый день в 10:00
     scheduler.add_job(check_deadline_reminders, trigger="cron", hour=10, minute=0, args=[bot])
+
+    # Утренний брифинг каждому сотруднику — каждый день в 9:00
+    scheduler.add_job(morning_briefing, trigger="cron", hour=9, minute=0, args=[bot])
 
     # Сводка просроченных в общий чат — каждый день в 9:00
     scheduler.add_job(check_overdue_tasks, trigger="cron", hour=9, minute=0, args=[bot])
