@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change
 from datetime import datetime, date
 
 routes = web.RouteTableDef()
@@ -79,15 +79,16 @@ def task_row(t, project_filter="", status_filter=""):
     back_url = f"/?project={project_filter}&status={status_filter}"
 
     if t["status"] == "Выполнена":
-        action_btn = f"""<a href="/reopen/{t['id']}?back={back_url}" title="Переоткрыть" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F3F4F6;color:#6B7280;text-decoration:none;font-size:15px;" onclick="return confirm('Переоткрыть задачу?')">↩️</a>"""
+        action_btn = f"""<a href="#" title="Переоткрыть" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F3F4F6;color:#6B7280;text-decoration:none;font-size:15px;" onclick="var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{t['id']}?back={back_url}&author='+encodeURIComponent(n)}};return false;">↩️</a>"""
     else:
-        action_btn = f"""<a href="/done/{t['id']}?back={back_url}" title="Завершить" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#D1FAE5;color:#059669;text-decoration:none;font-size:15px;" onclick="return confirm('Отметить как выполненную?')">✅</a>"""
+        action_btn = f"""<a href="#" title="Завершить" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#D1FAE5;color:#059669;text-decoration:none;font-size:15px;" onclick="var n=prompt('Ваше имя:');if(n){{window.location='/done/{t['id']}?back={back_url}&author='+encodeURIComponent(n)}};return false;">✅</a>"""
 
     actions_html = f"""<div style="display:flex;gap:4px;align-items:center;">
     <a href="/edit/{t['id']}" title="Редактировать" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#EFF6FF;color:#3B82F6;text-decoration:none;font-size:15px;">✏️</a>
     <a href="/comment/{t['id']}" title="Комментарий" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F5F3FF;color:#7C3AED;text-decoration:none;font-size:15px;">💬</a>
     {action_btn}
     <a href="/attach/{t['id']}" title="Вложения" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#FFF7ED;color:#EA580C;text-decoration:none;font-size:15px;">📎</a>
+    <a href="/history/{t['id']}" title="История изменений" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F0FDF4;color:#16A34A;text-decoration:none;font-size:15px;">🕐</a>
 </div>"""
 
     return f"""
@@ -254,14 +255,16 @@ tr:hover td {{ background: #F9FAFB; }}
 @routes.get("/done/{task_id}")
 async def mark_done(request):
     task_id = int(request.match_info["task_id"])
-    update_status(task_id, "Выполнена")
+    author = request.rel_url.query.get("author", "Дашборд")
+    update_status(task_id, "Выполнена", changed_by=author)
     back = request.rel_url.query.get("back", "/")
     raise web.HTTPFound(back)
 
 @routes.get("/reopen/{task_id}")
 async def reopen_task(request):
     task_id = int(request.match_info["task_id"])
-    update_status(task_id, "Открыта")
+    author = request.rel_url.query.get("author", "Дашборд")
+    update_status(task_id, "Открыта", changed_by=author)
     back = request.rel_url.query.get("back", "/")
     raise web.HTTPFound(back)
 
@@ -326,6 +329,8 @@ textarea {{ height: 80px; resize: vertical; }}
     <select name="status">{status_options}</select>
     <label>Комментарий</label>
     <textarea name="comment">{task['comment'] or ''}</textarea>
+    <label>Ваше имя (для истории)</label>
+    <input type="text" name="editor_name" placeholder="Введите ваше имя" required>
     <div class="btns">
       <button type="submit" class="btn-save">💾 Сохранить</button>
       <a href="{back}" class="btn-cancel">Отмена</a>
@@ -343,6 +348,12 @@ async def edit_task_save(request):
     back = request.rel_url.query.get("back", "/")
     data = await request.post()
     from database import get_conn
+    from database import get_conn
+    author = data.get("editor_name", "Дашборд")
+    tasks_list = get_tasks()
+    old_task = next((t for t in tasks_list if t["id"] == task_id), {})
+    fields = {"title": "title", "assignee": "assignee", "department": "department",
+              "project": "project", "deadline": "deadline", "status": "status", "comment": "comment"}
     with get_conn() as conn:
         conn.execute(
             "UPDATE tasks SET title=?, assignee=?, department=?, project=?, deadline=?, status=?, comment=? WHERE id=?",
@@ -357,6 +368,14 @@ async def edit_task_save(request):
                 task_id,
             )
         )
+        for key, db_key in fields.items():
+            new_val = data.get(key, "")
+            old_val = str(old_task.get(db_key) or "")
+            if new_val != old_val:
+                conn.execute(
+                    "INSERT INTO task_history (task_id, changed_by, field, old_value, new_value) VALUES (?,?,?,?,?)",
+                    (task_id, author, key, old_val, new_val)
+                )
     raise web.HTTPFound(back)
 
 
@@ -499,3 +518,75 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
 </html>"""
     return web.Response(text=html, content_type="text/html")
 
+
+
+# ─── История изменений задачи ───────────────────────────────────────────────
+@routes.get("/history/{task_id}")
+async def task_history_page(request):
+    task_id = int(request.match_info["task_id"])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        raise web.HTTPFound("/")
+    back = request.rel_url.query.get("back", "/")
+    history = get_task_history(task_id)
+
+    field_labels = {"status": "Статус", "title": "Задача", "assignee": "Ответственный",
+                    "department": "Отдел", "project": "Проект", "deadline": "Срок", "comment": "Комментарий"}
+    status_colors = {"Выполнена": "#10B981", "Открыта": "#3B82F6", "В работе": "#F59E0B"}
+
+    rows_html = ""
+    for h in history:
+        field = h.get("field", "")
+        label = field_labels.get(field, field)
+        old_v = h.get("old_value") or "—"
+        new_v = h.get("new_value") or "—"
+        color = status_colors.get(new_v, "#6B7280")
+        time = h.get("changed_at", "")[:16]
+        rows_html += f"""<tr>
+            <td style="padding:12px;color:#6B7280;font-size:13px;white-space:nowrap;">{time}</td>
+            <td style="padding:12px;font-weight:600;">{h.get("changed_by","—")}</td>
+            <td style="padding:12px;color:#6B7280;">{label}</td>
+            <td style="padding:12px;color:#9CA3AF;font-size:13px;">{old_v}</td>
+            <td style="padding:12px;">
+                <span style="background:{color}20;color:{color};padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">{new_v}</span>
+            </td>
+        </tr>"""
+
+    if not rows_html:
+        rows_html = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#9CA3AF;">История изменений пуста</td></tr>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>История задачи #{task_id}</title>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
+.header {{ background: #1E293B; color: white; padding: 20px 32px; }}
+.header h1 {{ font-size: 20px; font-weight: 700; }}
+.header p {{ opacity: 0.7; font-size: 13px; margin-top: 4px; }}
+.wrap {{ padding: 32px; }}
+table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; }}
+thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing:.05em; border-bottom: 2px solid #E5E7EB; }}
+tr:hover td {{ background: #F9FAFB; }}
+.btn-back {{ display:inline-block;margin-top:16px;padding:10px 24px;background:#F3F4F6;color:#374151;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600; }}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🕐 История изменений #{task_id}</h1>
+  <p>{task['title']}</p>
+</div>
+<div class="wrap">
+  <table>
+    <thead><tr><th>Дата и время</th><th>Кто изменил</th><th>Поле</th><th>Было</th><th>Стало</th></tr></thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+  <a href="{back}" class="btn-back">← Назад</a>
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
