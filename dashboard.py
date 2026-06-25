@@ -104,7 +104,7 @@ def task_row(t, project_filter="", status_filter=""):
         </span>
     </td>
     <td style="padding:10px 12px; color:#4B5563; font-size:13px; min-width:180px;">{comment_html}</td>
-    <td style="padding:10px 12px; white-space:nowrap;">{actions_html}</td>
+    <td class="row-actions" style="padding:10px 12px; white-space:nowrap;">{actions_html}</td>
 </tr>"""
 
 def calc_stats(tasks):
@@ -189,8 +189,7 @@ select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font
 table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
 thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; white-space: nowrap; }}
 tr:hover td {{ background: #F9FAFB; }}
-tr:hover .row-actions a {{ opacity: 1; }}
-.row-actions a {{ opacity: 0.4; transition: opacity .15s; }}
+.row-actions a {{ opacity: 0.7; transition: opacity .15s, transform .15s; }}
 .row-actions a:hover {{ opacity: 1 !important; transform: scale(1.1); }}
 </style>
 </head>
