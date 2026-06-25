@@ -21,6 +21,7 @@ class TaskCreation(StatesGroup):
     waiting_for_text = State()
     editing_field = State()
     choosing_project = State()
+    choosing_assignee = State()
     confirming = State()
     confirming_multiple = State()
     correcting_field_multiple = State()
@@ -51,6 +52,38 @@ FIELD_LABELS = {
     "deadline": "Срок",
     "comment": "Комментарий",
 }
+
+# Список руководителей для быстрого выбора
+MANAGERS = [
+    "Абдуллах Н.",
+    "Камалов Н.",
+    "Кострыкин И.",
+    "Яманова Э.",
+    "Аскарова М.",
+    "Кульбаева Б.",
+    "Мырзағали Е.",
+    "Елемес Е.",
+    "Оспанова А.",
+    "Луданная Л.",
+    "Маркелова И.",
+    "Мустафина А.",
+    "Куниязов З.",
+]
+
+def managers_keyboard():
+    """Клавиатура выбора ответственного из списка руководителей."""
+    buttons = []
+    row = []
+    for i, name in enumerate(MANAGERS):
+        row.append(InlineKeyboardButton(text=name, callback_data=f"mgr_{i}"))
+        if len(row) == 2:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append([InlineKeyboardButton(text="✏️ Ввести вручную", callback_data="mgr_manual")])
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 async def notify_assignee(bot: Bot, assignee: str, title: str, project: str, deadline: str):
@@ -1056,6 +1089,19 @@ async def universal_task_creator(message: Message, state: FSMContext):
     project = parsed.get("project", "")
     projects = get_projects()
 
+    # Если ответственный не распознан — показываем список руководителей
+    if not parsed.get("assignee"):
+        await state.update_data(parsed=parsed)
+        await state.set_state(TaskCreation.choosing_assignee)
+        await message.answer(
+            f"📌 *{parsed.get('title', '—')}*\n"
+            f"📅 {parsed.get('deadline') or '—'}\n\n"
+            "👤 Выберите ответственного:",
+            reply_markup=managers_keyboard(),
+            parse_mode="Markdown"
+        )
+        return
+
     # Если проект не распознан — спрашиваем
     if not project and projects:
         await state.update_data(parsed=parsed)
@@ -1091,3 +1137,68 @@ async def universal_task_creator(message: Message, state: FSMContext):
         f"_Используйте /done {task_id} когда выполните_",
         parse_mode="Markdown"
     )
+
+
+
+# ─── Выбор ответственного из списка руководителей ─────────────────────────
+@router.callback_query(F.data.startswith("mgr_"), TaskCreation.choosing_assignee)
+async def choose_manager(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    parsed = data.get("parsed", {})
+    projects = get_projects()
+
+    if callback.data == "mgr_manual":
+        # Ввод вручную
+        await state.set_state(TaskCreation.editing_field)
+        await state.update_data(editing="assignee")
+        await callback.message.answer("✏️ Введите имя ответственного:")
+        await callback.answer()
+        return
+
+    idx = int(callback.data.replace("mgr_", ""))
+    assignee = MANAGERS[idx]
+    parsed["assignee"] = assignee
+    await state.update_data(parsed=parsed)
+
+    # Если проект не распознан — спрашиваем проект
+    if not parsed.get("project") and projects:
+        await state.set_state(TaskCreation.choosing_project)
+        await callback.message.edit_text(
+            f"📌 *{parsed.get('title', '—')}*\n"
+            f"👤 {assignee} | 📅 {parsed.get('deadline') or '—'}\n\n"
+            "📁 В какой проект?",
+            reply_markup=projects_keyboard(projects),
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+        return
+
+    # Сохраняем задачу
+    project = parsed.get("project") or "Общие"
+    task_id = add_task(
+        project=project,
+        assignee=assignee,
+        department=parsed.get("department") or "",
+        title=parsed.get("title") or "Без названия",
+        deadline=parsed.get("deadline") or "",
+        comment=parsed.get("description") or "",
+    )
+    await notify_assignee(callback.bot, assignee, parsed.get("title") or "", project, parsed.get("deadline") or "")
+    await state.clear()
+    await callback.message.edit_text(
+        f"✅ *Задача #{task_id} создана!*\n\n"
+        f"📌 {parsed.get('title')}\n"
+        f"👤 {assignee} | 📁 {project} | 📅 {parsed.get('deadline') or '—'}\n\n"
+        f"_Используйте /done {task_id} когда выполните_",
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+# ─── /assignees — показать список руководителей ────────────────────────────
+@router.message(Command("assignees"))
+async def cmd_assignees(message: Message):
+    lines = ["👥 *Список руководителей:*\n"]
+    for i, name in enumerate(MANAGERS, 1):
+        lines.append(f"{i}. {name}")
+    await message.answer("\n".join(lines), parse_mode="Markdown")
