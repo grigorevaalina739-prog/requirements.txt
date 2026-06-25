@@ -661,6 +661,90 @@ async def reopen_task(request):
     back = request.rel_url.query.get("back", "/")
     raise web.HTTPFound(back)
 
+
+
+# ─── Страница создания задачи ───────────────────────────────────────────────
+@routes.get("/newtask")
+async def newtask_page(request):
+    projects = get_projects()
+    project_options = "".join(f'<option value="{p["name"]}">{p["name"]}</option>' for p in projects)
+    managers = ["Абдуллах Н.","Камалов Н.","Кострыкин И.","Яманова Э.","Аскарова М.",
+                "Кульбаева Б.","Мырзағали Е.","Елемес Е.","Оспанова А.","Луданная Л.",
+                "Маркелова И.","Мустафина А.","Куниязов З."]
+    manager_options = "".join(f'<option value="{m}">{m}</option>' for m in managers)
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Новая задача</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0f1e;color:#f1f5f9;min-height:100vh;}}
+.topbar{{background:rgba(10,15,30,.96);border-bottom:1px solid rgba(255,255,255,.08);padding:0 32px;height:60px;display:flex;align-items:center;gap:16px;}}
+.topbar a{{color:rgba(255,255,255,.6);text-decoration:none;font-size:13px;}}
+.topbar h1{{font-size:15px;font-weight:700;color:white;}}
+.wrap{{max-width:560px;margin:40px auto;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:32px;}}
+label{{display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px;margin-top:18px;text-transform:uppercase;letter-spacing:.05em;}}
+input,select,textarea{{width:100%;padding:10px 14px;border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:14px;font-family:inherit;background:rgba(255,255,255,.06);color:#f1f5f9;outline:none;transition:all .15s;}}
+input:focus,select:focus,textarea:focus{{border-color:rgba(59,130,246,.5);background:rgba(59,130,246,.06);}}
+select option{{background:#1e293b;}}
+textarea{{height:80px;resize:vertical;}}
+.btns{{display:flex;gap:10px;margin-top:24px;}}
+.btn-save{{padding:11px 24px;background:#3b82f6;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;}}
+.btn-save:hover{{background:#2563eb;transform:translateY(-1px);}}
+.btn-cancel{{padding:11px 24px;background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;transition:all .2s;}}
+.btn-cancel:hover{{background:rgba(255,255,255,.1);color:white;}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/">← Назад</a>
+  <h1>➕ Новая задача</h1>
+</div>
+<div class="wrap">
+  <form method="post" action="/newtask">
+    <label>Название задачи *</label>
+    <input type="text" name="title" required placeholder="Что нужно сделать?">
+    <label>Ответственный</label>
+    <select name="assignee"><option value="">— Выберите —</option>{manager_options}</select>
+    <label>Проект</label>
+    <select name="project"><option value="Общие">Общие</option>{project_options}</select>
+    <label>Срок</label>
+    <input type="date" name="deadline">
+    <label>Отдел</label>
+    <input type="text" name="department" placeholder="Например: Бухгалтерия">
+    <label>Комментарий</label>
+    <textarea name="comment" placeholder="Дополнительная информация..."></textarea>
+    <div class="btns">
+      <button type="submit" class="btn-save">💾 Создать задачу</button>
+      <a href="/" class="btn-cancel">Отмена</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+@routes.post("/newtask")
+async def newtask_save(request):
+    from database import add_task as db_add_task
+    data = await request.post()
+    title = data.get("title","").strip()
+    if not title:
+        raise web.HTTPFound("/newtask")
+    db_add_task(
+        project=data.get("project","Общие"),
+        assignee=data.get("assignee",""),
+        department=data.get("department",""),
+        title=title,
+        deadline=data.get("deadline",""),
+        comment=data.get("comment",""),
+    )
+    raise web.HTTPFound("/")
+
+
 def create_app():
     app = web.Application()
     app.add_routes(routes)
