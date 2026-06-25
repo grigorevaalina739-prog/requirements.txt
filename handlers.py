@@ -282,7 +282,7 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
     action = callback.data.replace("menu_", "")
     await callback.answer()
     if action == "newtask":
-        await state.set_state(TaskCreation.entering_text)
+        await state.set_state(TaskCreation.waiting_for_text)
         await callback.message.answer("📝 Опишите задачу — кому, что и к какому сроку:")
     elif action == "mytasks":
         with get_conn() as conn:
