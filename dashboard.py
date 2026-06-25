@@ -200,7 +200,9 @@ select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font
 .table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
 table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
 thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; white-space: nowrap; }}
-tr:hover td {{ background: #F9FAFB; }}
+tr {{ transition: transform .15s ease, box-shadow .15s ease; }}
+tr:hover td {{ background: #EFF6FF; }}
+tr:hover {{ transform: scaleY(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; z-index: 1; }}
 .row-actions a {{ opacity: 0.7; transition: opacity .15s, transform .15s; }}
 .row-actions a:hover {{ opacity: 1 !important; transform: scale(1.1); }}
 </style>
@@ -590,7 +592,9 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
 .wrap {{ padding: 32px; }}
 table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; }}
 thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing:.05em; border-bottom: 2px solid #E5E7EB; }}
-tr:hover td {{ background: #F9FAFB; }}
+tr {{ transition: transform .15s ease, box-shadow .15s ease; }}
+tr:hover td {{ background: #EFF6FF; }}
+tr:hover {{ transform: scaleY(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; z-index: 1; }}
 .btn-back {{ display:inline-block;margin-top:16px;padding:10px 24px;background:#F3F4F6;color:#374151;border-radius:8px;text-decoration:none;font-size:14px;font-weight:600; }}
 </style>
 </head>
