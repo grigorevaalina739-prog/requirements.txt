@@ -26,12 +26,6 @@ async def main():
     # Планировщик
     scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
     
-    # Авто-статус Просрочена + уведомление ответственному — каждую ночь в 00:05
-    scheduler.add_job(auto_mark_overdue, trigger="cron", hour=0, minute=5, args=[bot])
-
-    # Уведомление в день дедлайна — каждый день в 8:00
-    scheduler.add_job(check_deadline_reminders, trigger="cron", hour=8, minute=0, args=[bot])
-
     # Напоминание за 1 день — каждый день в 10:00
     scheduler.add_job(check_deadline_reminders, trigger="cron", hour=10, minute=0, args=[bot])
 
