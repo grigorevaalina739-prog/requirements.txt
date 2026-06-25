@@ -289,23 +289,34 @@ async def cmd_start(message: Message):
     # Матчинг: ищем задачи где assignee совпадает с именем, фамилией или частью имени
     # Также проверяем через MANAGERS — находим запись в списке по совпадению с tg_name
     def name_matches(tg, assignee):
-        tg_l = tg.lower()
-        as_l = (assignee or "").lower()
-        if not as_l:
+        tg_l = tg.lower().strip()
+        as_l = (assignee or "").lower().strip()
+        if not as_l or not tg_l:
             return False
-        # Прямое совпадение
+        # 1. Прямое совпадение
         if tg_l in as_l or as_l in tg_l:
             return True
-        # Совпадение по фамилии (первое слово assignee)
-        surname = as_l.split()[0] if as_l else ""
-        if surname and surname in tg_l:
-            return True
-        # Проверяем через MANAGERS — если tg_name совпадает с именем менеджера
+        # 2. Фамилия из assignee (первое слово) содержится в tg_name
+        as_surname = as_l.split()[0]
+        tg_words = tg_l.split()
+        if len(as_surname) >= 4:
+            for word in tg_words:
+                if as_surname in word or word in as_surname:
+                    return True
+        # 3. Любое слово из tg_name (>=4 букв) совпадает со словом из assignee
+        as_words = as_l.split()
+        for tg_word in tg_words:
+            if len(tg_word) < 4:
+                continue
+            for as_word in as_words:
+                if tg_word in as_word or as_word in tg_word:
+                    return True
+        # 4. Проверяем через MANAGERS
         for mgr in MANAGERS:
             mgr_l = mgr.lower()
             mgr_surname = mgr_l.split()[0]
-            if mgr_surname in tg_l or tg_l in mgr_l:
-                if mgr_surname in as_l or mgr_l.split()[0] in as_l:
+            if len(mgr_surname) >= 4 and (mgr_surname in tg_l or any(mgr_surname in w for w in tg_words)):
+                if mgr_surname in as_l:
                     return True
         return False
 
