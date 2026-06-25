@@ -39,6 +39,15 @@ def init_db():
             name TEXT NOT NULL,
             created_at TEXT DEFAULT (date('now'))
         );
+        CREATE TABLE IF NOT EXISTS task_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            changed_by TEXT DEFAULT 'Дашборд',
+            field TEXT DEFAULT 'status',
+            old_value TEXT DEFAULT '',
+            new_value TEXT DEFAULT '',
+            changed_at TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS task_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id INTEGER NOT NULL,
@@ -87,9 +96,15 @@ def get_tasks(project=None, status=None):
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(query, params).fetchall()]
 
-def update_status(task_id, status):
+def update_status(task_id, status, changed_by="Дашборд"):
     with get_conn() as conn:
+        old = conn.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
+        old_status = old["status"] if old else ""
         conn.execute("UPDATE tasks SET status=? WHERE id=?", (status, task_id))
+        conn.execute(
+            "INSERT INTO task_history (task_id, changed_by, field, old_value, new_value) VALUES (?,?,?,?,?)",
+            (task_id, changed_by, "status", old_status, status)
+        )
     return True
 
 def get_stats():
@@ -160,5 +175,21 @@ def get_task_comments(task_id: int):
     with get_conn() as conn:
         return [dict(r) for r in conn.execute(
             "SELECT * FROM task_comments WHERE task_id=? ORDER BY created_at",
+            (task_id,)
+        ).fetchall()]
+
+
+def log_task_change(task_id: int, changed_by: str, field: str, old_value: str, new_value: str):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO task_history (task_id, changed_by, field, old_value, new_value) VALUES (?,?,?,?,?)",
+            (task_id, changed_by, field, old_value, new_value)
+        )
+    return True
+
+def get_task_history(task_id: int):
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM task_history WHERE task_id=? ORDER BY changed_at DESC",
             (task_id,)
         ).fetchall()]
