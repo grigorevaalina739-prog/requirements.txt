@@ -273,7 +273,8 @@ async def cmd_start(message: Message):
          InlineKeyboardButton(text="📊 Дашборд", callback_data="menu_dashboard")],
         [InlineKeyboardButton(text="✅ Выполненные", callback_data="menu_done"),
          InlineKeyboardButton(text="⚠️ Просроченные", callback_data="menu_overdue")],
-        [InlineKeyboardButton(text="📁 Проекты", callback_data="menu_projects")],
+        [InlineKeyboardButton(text="📁 Проекты", callback_data="menu_projects"),
+         InlineKeyboardButton(text="🆕 Новый проект", callback_data="menu_newproject")],
     ])
     await message.answer(
         f"👋 Добро пожаловать, *{tg_name}*!\n\nЧто хотите сделать?",
@@ -384,12 +385,15 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
     elif action == "projects":
         projects = get_projects()
         if not projects:
-            await callback.message.answer("Проектов пока нет.")
+            await callback.message.answer("Проектов пока нет. Нажмите 🆕 Новый проект.")
             return
         lines = ["📁 *Проекты:*\n"]
         for p in projects:
             lines.append(f"• {p['name']}")
         await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+    elif action == "newproject":
+        await state.set_state(ProjectAdding.waiting_for_name)
+        await callback.message.answer("📁 Введите название нового проекта:")
 
 
 @router.message(Command("dashboard"))
@@ -1154,14 +1158,13 @@ async def cmd_newproject(message: Message, state: FSMContext):
     await message.answer("📁 Введите название проекта:")
 
 
+# ─── Добавление проекта (FSM) ──────────────────────────────────────────────
 @router.message(ProjectAdding.waiting_for_name)
 async def process_project_name(message: Message, state: FSMContext):
     name = message.text.strip()
     add_project(name)
     await state.clear()
     await message.answer(f"✅ Проект *{name}* создан!", parse_mode="Markdown")
-
-
 
 
 # ─── Универсальный обработчик — любой текст создаёт задачу ────────────────
