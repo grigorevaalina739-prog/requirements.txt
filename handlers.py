@@ -384,30 +384,17 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
             lines.append(f"🔴 *#{t['id']}* {t['title'][:50]}\n   👤 {t.get('assignee') or '—'} | 📅 {t.get('deadline')}")
         await callback.message.answer("\n".join(lines), parse_mode="Markdown")
     elif action == "attach":
-        tasks = get_tasks()
-        with get_conn() as conn:
-            user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
-        my_name = user["name"] if user else ""
-        active = [t for t in tasks if t["status"] != "Выполнена"]
-        if my_name:
-            show_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
-            if not show_tasks:
-                show_tasks = active[:15]  # если нет своих — показать все
-        else:
-            show_tasks = active[:15]
-        if not show_tasks:
-            await callback.message.answer("📋 Нет активных задач.")
+        projects = get_projects()
+        if not projects:
+            await callback.message.answer("📁 Проектов пока нет.")
             await callback.answer()
             return
-        buttons = []
-        for t in show_tasks:
-            short = t["title"][:42] + "…" if len(t["title"]) > 42 else t["title"]
-            buttons.append([InlineKeyboardButton(text=f"#{t['id']} {short}", callback_data=f"attach_pick_{t['id']}")])
+        buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"attach_proj_{p['name']}")] for p in projects]
+        buttons.append([InlineKeyboardButton(text="📋 Все задачи", callback_data="attach_proj_ALL")])
         buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")])
         await callback.message.answer(
-            "📎 *Выберите задачу:*",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-            parse_mode="Markdown"
+            "📎 Выберите проект:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
         )
     elif action == "projects":
         projects = get_projects()
@@ -845,29 +832,17 @@ async def cmd_attach(message: Message, state: FSMContext):
             parse_mode="Markdown"
         )
         return
-    # Показываем список активных задач для выбора
-    with get_conn() as conn:
-        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
-    my_name = user["name"] if user else ""
-    active = [t for t in tasks if t["status"] != "Выполнена"]
-    if my_name:
-        show_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
-        if not show_tasks:
-            show_tasks = active[:15]
-    else:
-        show_tasks = active[:15]
-    if not show_tasks:
-        await message.answer("📋 Нет активных задач.")
+    # Показываем список проектов
+    projects = get_projects()
+    if not projects:
+        await message.answer("📁 Проектов пока нет.")
         return
-    buttons = []
-    for t in show_tasks:
-        short = t["title"][:45] + "…" if len(t["title"]) > 45 else t["title"]
-        buttons.append([InlineKeyboardButton(text=f"#{t['id']} {short}", callback_data=f"attach_pick_{t['id']}")])
+    buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"attach_proj_{p['name']}")] for p in projects]
+    buttons.append([InlineKeyboardButton(text="📋 Все задачи", callback_data="attach_proj_ALL")])
     buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")])
     await message.answer(
-        "📎 *Выберите задачу для прикрепления файла:*",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-        parse_mode="Markdown"
+        "📎 Выберите проект:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons)
     )
 
 
@@ -1413,3 +1388,51 @@ async def cmd_delete_user(message: Message):
     await message.answer(f"✅ Удалено: *{names}*", parse_mode="Markdown")
 
 
+
+
+# ─── Выбор проекта для прикрепления файла ─────────────────────────────────
+@router.callback_query(F.data.startswith("attach_proj_"))
+async def attach_select_project(callback: CallbackQuery, state: FSMContext):
+    proj = callback.data.replace("attach_proj_", "")
+    tasks = get_tasks()
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+    my_name = user["name"] if user else ""
+
+    active = [t for t in tasks if t["status"] != "Выполнена"]
+    if proj != "ALL":
+        active = [t for t in active if t.get("project") == proj]
+
+    if my_name:
+        my_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
+        other_tasks = [t for t in active if t not in my_tasks]
+        show_tasks = my_tasks + other_tasks
+    else:
+        show_tasks = active
+
+    if not show_tasks:
+        await callback.message.edit_text(
+            "📋 В этом проекте нет активных задач.",
+            parse_mode="Markdown"
+        )
+        await callback.answer()
+        return
+
+    buttons = []
+    for t in show_tasks[:20]:
+        short = t["title"][:40] + "…" if len(t["title"]) > 40 else t["title"]
+        who = " (" + t["assignee"].split()[0] + ")" if t.get("assignee") else ""
+        buttons.append([InlineKeyboardButton(
+            text=f"#{t['id']} {short}{who}",
+            callback_data=f"attach_pick_{t['id']}"
+        )])
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="menu_attach")])
+    buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")])
+
+    proj_label = "всех проектов" if proj == "ALL" else proj
+    await callback.message.edit_text(
+        f"📎 Задачи проекта {proj_label}:\nВыберите задачу:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+        parse_mode=None
+    )
+    await callback.answer()
