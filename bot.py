@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiohttp import web
 from config import BOT_TOKEN
 from handlers import router
-from scheduler import check_overdue_tasks, check_deadline_reminders
+from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, auto_mark_overdue, escalate_overdue, weekly_digest
 from database import init_db
 from dashboard import create_app
 
@@ -26,14 +26,23 @@ async def main():
     # Планировщик
     scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
     
-    # Просроченные задачи — каждый день в 9:00
-    scheduler.add_job(check_overdue_tasks, trigger="cron", hour=9, minute=0, args=[bot])
-    
-    # Уведомление за 1 день — каждый день в 10:00
-    scheduler.add_job(check_deadline_reminders, trigger="cron", hour=10, minute=0, args=[bot])
-    
+    # Авто-статус Просрочена + уведомление ответственному — каждую ночь в 00:05
+    scheduler.add_job(auto_mark_overdue, trigger="cron", hour=0, minute=5, args=[bot])
+
     # Уведомление в день дедлайна — каждый день в 8:00
     scheduler.add_job(check_deadline_reminders, trigger="cron", hour=8, minute=0, args=[bot])
+
+    # Напоминание за 1 день — каждый день в 10:00
+    scheduler.add_job(check_deadline_reminders, trigger="cron", hour=10, minute=0, args=[bot])
+
+    # Сводка просроченных в общий чат — каждый день в 9:00
+    scheduler.add_job(check_overdue_tasks, trigger="cron", hour=9, minute=0, args=[bot])
+
+    # Эскалация руководителю если просрочено 3+ дней — каждый день в 9:05
+    scheduler.add_job(escalate_overdue, trigger="cron", hour=9, minute=5, args=[bot])
+
+    # Еженедельный дайджест каждому сотруднику — каждый понедельник в 9:00
+    scheduler.add_job(weekly_digest, trigger="cron", day_of_week="mon", hour=9, minute=0, args=[bot])
 
     scheduler.start()
 
@@ -50,3 +59,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
