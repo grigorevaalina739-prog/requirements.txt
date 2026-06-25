@@ -237,7 +237,9 @@ async def cmd_start(message: Message):
         "⚠️ /overdue — просроченные\n"
         "📁 /projects — список проектов\n"
         "🆕 /newproject — создать проект\n"
-        "👤 /register — зарегистрироваться для уведомлений"
+        "👤 /register — зарегистрироваться для уведомлений\n"
+        "📎 /attach <ID> — прикрепить файл к задаче\n"
+        "💬 /comment <ID> — добавить комментарий к задаче"
     )
 
 
@@ -613,6 +615,59 @@ async def etask_save_field(message: Message, state: FSMContext):
     )
 
 
+
+# ─── /attach <ID> — прикрепить файл к задаче напрямую ─────────────────────
+@router.message(Command("attach"))
+async def cmd_attach(message: Message, state: FSMContext):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(
+            "📎 Укажите ID задачи:\n"
+            "Например: /attach 15\n\n"
+            "ID задачи можно найти в дашборде или командой /tasks"
+        )
+        return
+    task_id = int(parts[1])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        await message.answer(f"❌ Задача #{task_id} не найдена.")
+        return
+    await state.update_data(commenting_task_id=task_id)
+    await state.set_state(TaskCommenting.waiting_for_file)
+    title = task["title"][:60] + "..." if len(task["title"]) > 60 else task["title"]
+    await message.answer(
+        f"📎 Прикрепляем файл к задаче *#{task_id}*:\n_{title}_\n\nОтправьте файл, фото или видео:",
+        parse_mode="Markdown"
+    )
+
+
+# ─── /comment <ID> — добавить комментарий к задаче напрямую ───────────────
+@router.message(Command("comment"))
+async def cmd_comment(message: Message, state: FSMContext):
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(
+            "💬 Укажите ID задачи:\n"
+            "Например: /comment 15\n\n"
+            "ID задачи можно найти в дашборде или командой /tasks"
+        )
+        return
+    task_id = int(parts[1])
+    tasks = get_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if not task:
+        await message.answer(f"❌ Задача #{task_id} не найдена.")
+        return
+    await state.update_data(commenting_task_id=task_id)
+    await state.set_state(TaskCommenting.waiting_for_comment)
+    title = task["title"][:60] + "..." if len(task["title"]) > 60 else task["title"]
+    await message.answer(
+        f"💬 Комментарий к задаче *#{task_id}*:\n_{title}_\n\nНапишите ваш комментарий:",
+        parse_mode="Markdown"
+    )
+
+
 # ─── /delete ───────────────────────────────────────────────────────────────
 @router.message(Command("delete"))
 async def cmd_delete(message: Message):
@@ -932,3 +987,4 @@ async def process_project_name(message: Message, state: FSMContext):
     add_project(name)
     await state.clear()
     await message.answer(f"✅ Проект *{name}* создан!", parse_mode="Markdown")
+
