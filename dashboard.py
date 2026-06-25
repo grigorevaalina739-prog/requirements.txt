@@ -53,63 +53,102 @@ def format_deadline(deadline_str):
 def task_row(t, project_filter="", status_filter=""):
     today = datetime.now().strftime("%Y-%m-%d")
     overdue = t["deadline"] and t["deadline"] < today and t["status"] != "Выполнена"
-    status_color = {
-        "Открыта": "#3B82F6",
-        "В работе": "#F59E0B",
-        "Выполнена": "#10B981",
-        "На согласовании": "#F97316",
-        "Просрочена": "#EF4444",
-        "Заблокирована": "#1F2937",
-    }.get(t["status"], "#6B7280")
-    row_bg = "#FFF5F5" if overdue else "white"
+
+    STATUS_CONFIG = {
+        "Открыта":         ("#3B82F6", "#EFF6FF"),
+        "В работе":        ("#D97706", "#FFFBEB"),
+        "Выполнена":       ("#059669", "#ECFDF5"),
+        "На согласовании": ("#EA580C", "#FFF7ED"),
+        "Просрочена":      ("#DC2626", "#FEF2F2"),
+        "Заблокирована":   ("#374151", "#F3F4F6"),
+    }
+    sc_color, sc_bg = STATUS_CONFIG.get(t["status"], ("#6B7280", "#F9FAFB"))
 
     comments = get_task_comments(t["id"])
     if comments:
         last = comments[-1]
-        if last.get("file_id"):
-            comment_text = f"📎 {last['author']}: {last['file_name']}"
-        else:
-            comment_text = f"💬 {last['author']}: {last['text'][:80]}"
-        comment_count = f" <span style='color:#9CA3AF;font-size:11px;'>({len(comments)})</span>" if len(comments) > 1 else ""
-        comment_html = f"{comment_text}{comment_count}"
+        comment_text = f"📎 {last['file_name']}" if last.get("file_id") else f"{last['text'][:60]}"
+        comment_html = f'<span style="color:#64748B;font-size:12px;">{comment_text}</span>'
+        if len(comments) > 1:
+            comment_html += f' <span style="background:#F1F5F9;color:#94A3B8;padding:1px 6px;border-radius:10px;font-size:11px;">{len(comments)}</span>'
     else:
-        comment_html = "—"
+        comment_html = '<span style="color:#CBD5E1;">—</span>'
 
     pc = get_project_color(t["project"])
-    project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};border:1px solid {pc['border']}40;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
-    deadline_html = format_deadline(t["deadline"]) if t["status"] != "Выполнена" else f"<span style='color:#6B7280'>{t['deadline'] or '—'}</span>"
-
-    back_url = f"/?project={project_filter}&status={status_filter}"
+    project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
 
     if t["status"] == "Выполнена":
-        action_btn = f"""<a href="#" title="Переоткрыть" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F3F4F6;color:#6B7280;text-decoration:none;font-size:15px;" onclick="var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{t['id']}?back={back_url}&author='+encodeURIComponent(n)}};return false;">↩️</a>"""
+        deadline_html = f'<span style="color:#94A3B8;font-size:13px;">{t["deadline"] or "—"}</span>'
     else:
-        action_btn = f"""<a href="#" title="Завершить" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#D1FAE5;color:#059669;text-decoration:none;font-size:15px;" onclick="var n=prompt('Ваше имя:');if(n){{window.location='/done/{t['id']}?back={back_url}&author='+encodeURIComponent(n)}};return false;">✅</a>"""
+        deadline_html = format_deadline(t["deadline"])
 
-    actions_html = f"""<div style="display:flex;gap:4px;align-items:center;">
-    <a href="/edit/{t['id']}" title="Редактировать" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#EFF6FF;color:#3B82F6;text-decoration:none;font-size:15px;">✏️</a>
-    <a href="/comment/{t['id']}" title="Комментарий" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F5F3FF;color:#7C3AED;text-decoration:none;font-size:15px;">💬</a>
-    {action_btn}
-    <a href="/attach/{t['id']}" title="Вложения" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#FFF7ED;color:#EA580C;text-decoration:none;font-size:15px;">📎</a>
-    <a href="/history/{t['id']}" title="История изменений" style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:6px;background:#F0FDF4;color:#16A34A;text-decoration:none;font-size:15px;">🕐</a>
-</div>"""
+    assignee = t.get("assignee") or ""
+    if assignee and assignee != "—":
+        parts = assignee.split()
+        initials = (parts[0][0] if parts else "?") + (parts[1][0] if len(parts) > 1 else "")
+        av_colors = ["#3B82F6","#8B5CF6","#10B981","#F59E0B","#EF4444","#06B6D4","#EC4899"]
+        av_color = av_colors[sum(ord(c) for c in assignee) % len(av_colors)]
+        av_bg = av_color + "20"
+        assignee_html = (
+            '<div style="display:flex;align-items:center;gap:8px;">'
+            f'<div style="width:28px;height:28px;border-radius:50%;background:{av_bg};color:{av_color};'
+            f'font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">{initials}</div>'
+            f'<span style="font-size:13px;color:#374151;">{assignee}</span></div>'
+        )
+    else:
+        assignee_html = '<span style="color:#CBD5E1;">—</span>'
 
-    return f"""
-<tr style="background:{row_bg}; border-bottom:1px solid #E5E7EB;">
-    <td style="padding:10px 12px; color:#6B7280; font-size:13px; white-space:nowrap;">#{t['id']}</td>
-    <td style="padding:10px 12px; font-weight:500; min-width:220px;">{t['title']}</td>
-    <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['assignee'] or '—'}</td>
-    <td style="padding:10px 12px; color:#4B5563; white-space:nowrap;">{t['department'] or '—'}</td>
-    <td style="padding:10px 12px; white-space:nowrap;">{project_badge}</td>
-    <td style="padding:10px 12px; min-width:160px;">{deadline_html}</td>
-    <td style="padding:10px 12px; white-space:nowrap;">
-        <span style="background:{status_color}20; color:{status_color}; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600;">
-            {t['status']}
-        </span>
-    </td>
-    <td style="padding:10px 12px; color:#4B5563; font-size:13px; min-width:180px;">{comment_html}</td>
-    <td class="row-actions" style="padding:10px 12px; white-space:nowrap;">{actions_html}</td>
-</tr>"""
+    back_url = f"/?project={project_filter}&status={status_filter}"
+    row_border = "border-left:3px solid #EF4444;" if overdue else "border-left:3px solid transparent;"
+
+    tid = t['id']
+    if t["status"] == "Выполнена":
+        done_btn = (
+            f'<a href="#" title="Переоткрыть" '
+            f'style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#F1F5F9;color:#64748B;text-decoration:none;font-size:14px;" '
+            f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">↩️</a>"
+        )
+    else:
+        done_btn = (
+            f'<a href="#" title="Выполнено" '
+            f'style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#ECFDF5;color:#059669;text-decoration:none;font-size:14px;" '
+            f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/done/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">✅</a>"
+        )
+
+    actions_html = (
+        '<div style="display:flex;gap:4px;align-items:center;opacity:0;transition:opacity .15s;" class="row-actions-wrap">'
+        f'<a href="/edit/{tid}" title="Редактировать" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#EFF6FF;color:#3B82F6;text-decoration:none;font-size:14px;">✏️</a>'
+        f'<a href="/comment/{tid}" title="Комментарий" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#F5F3FF;color:#7C3AED;text-decoration:none;font-size:14px;">💬</a>'
+        f'{done_btn}'
+        '<div style="position:relative;display:inline-block;">'
+        '<button onclick="toggleMenu(this)" style="width:32px;height:32px;border-radius:50%;background:#F1F5F9;border:none;cursor:pointer;font-size:18px;color:#64748B;display:flex;align-items:center;justify-content:center;">⋯</button>'
+        '<div class="more-dropdown" style="display:none;position:absolute;right:0;top:36px;background:white;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:6px 0;">'
+        f'<a href="/attach/{tid}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#374151;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">📎 Вложения</a>'
+        f'<a href="/history/{tid}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#374151;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">🕐 История</a>'
+        '</div></div></div>'
+    )
+
+    title_short = t['title'][:90] + '…' if len(t['title']) > 90 else t['title']
+
+    return (
+        f'<tr class="task-row" style="{row_border}background:white;" '
+        f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#F8FAFC\';" '
+        f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
+        f'<td style="padding:14px 12px;color:#94A3B8;font-size:12px;font-weight:600;white-space:nowrap;">#{tid}</td>'
+        f'<td style="padding:14px 12px;min-width:220px;max-width:320px;">'
+        f'<div style="font-weight:500;font-size:14px;color:#0F172A;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
+        f'</td>'
+        f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
+        f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
+        f'<td style="padding:14px 12px;min-width:140px;">{deadline_html}</td>'
+        f'<td style="padding:14px 12px;white-space:nowrap;">'
+        f'<span style="display:inline-flex;align-items:center;gap:6px;background:{sc_bg};color:{sc_color};padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;">'
+        f'<span style="width:6px;height:6px;border-radius:50%;background:{sc_color};flex-shrink:0;"></span>'
+        f'{t["status"]}</span></td>'
+        f'<td style="padding:14px 12px;font-size:13px;min-width:160px;">{comment_html}</td>'
+        f'<td class="row-actions" style="padding:14px 12px;white-space:nowrap;">{actions_html}</td>'
+        f'</tr>'
+    )
 
 def calc_stats(tasks):
     today = datetime.now().strftime("%Y-%m-%d")
@@ -168,113 +207,257 @@ async def dashboard(request):
     title = f"Проект: {selected}" if selected else "Все проекты"
     progress_color = "#10B981" if stats['percent'] == 100 else "#3B82F6"
 
+    # Attention блок
+    all_tasks_full = get_tasks()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    attention_items = []
+    for tt in all_tasks_full:
+        if tt.get("deadline") == today_str and tt.get("status") != "Выполнена":
+            attention_items.append(f"⏰ Сегодня дедлайн: <b>{tt['title'][:50]}</b> ({tt.get('assignee') or '—'})")
+    for tt in all_tasks_full:
+        if tt.get("status") == "Просрочена":
+            attention_items.append(f"🔴 Просрочена: <b>{tt['title'][:50]}</b> ({tt.get('assignee') or '—'})")
+    attention_html = ""
+    if attention_items:
+        items_html = "".join(f'<div style="padding:10px 0;border-bottom:1px solid #FEE2E2;font-size:13px;color:#374151;">{i}</div>' for i in attention_items[:5])
+        attention_html = f'''<div style="background:white;border-radius:20px;padding:24px 28px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-left:4px solid #EF4444;margin-bottom:24px;">
+        <div style="font-size:15px;font-weight:700;color:#0F172A;margin-bottom:12px;">⚠️ Требует внимания</div>
+        {items_html}
+    </div>'''
+
+    # Статистика расширенная
+    all_stats = calc_stats(all_tasks_full)
+    today_deadline = sum(1 for t in all_tasks_full if t.get("deadline") == today_str and t.get("status") != "Выполнена")
+
+    # AI summary
+    if all_stats["overdue"] == 0:
+        overdue_text = "Просрочек нет ✓"
+    else:
+        overdue_text = f"{all_stats['overdue']} просрочено"
+    nearest = min((t["deadline"] for t in all_tasks_full if t.get("deadline") and t.get("deadline") > today_str and t.get("status") != "Выполнена"), default=None)
+    if nearest:
+        from datetime import date as ddate
+        days_left = (ddate.fromisoformat(nearest) - ddate.today()).days
+        nearest_text = f"До ближайшего дедлайна — {days_left} дн."
+    else:
+        nearest_text = "Активных дедлайнов нет"
+
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Task Dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Executive Task Center</title>
 <style>
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #F9FAFB; color: #111827; }}
-.header {{ background: #1E293B; color: white; padding: 20px 32px; display: flex; align-items: center; gap: 12px; }}
-.header h1 {{ font-size: 20px; font-weight: 700; }}
-.header span {{ opacity: 0.6; font-size: 13px; }}
-.stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 24px 32px; }}
-.stat {{ background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
-.stat .num {{ font-size: 32px; font-weight: 700; }}
-.stat .label {{ font-size: 13px; color: #6B7280; margin-top: 4px; }}
-.progress-section {{ padding: 0 32px 24px; }}
-.progress-card {{ background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
-.progress-title {{ font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; }}
-.progress-bar-wrap {{ display: flex; align-items: center; gap: 12px; }}
-.progress-bar-bg {{ flex: 1; background: #E5E7EB; border-radius: 999px; height: 14px; overflow: hidden; }}
-.progress-bar-fill {{ height: 100%; border-radius: 999px; transition: width .4s ease; }}
-.progress-percent {{ font-size: 18px; font-weight: 700; color: #111827; min-width: 52px; text-align: right; }}
-.progress-sub {{ font-size: 12px; color: #6B7280; margin-top: 8px; }}
-.project-bar {{ padding: 0 32px 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }}
-.filters {{ padding: 0 32px 16px; display: flex; gap: 12px; align-items: center; }}
-select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white; cursor: pointer; }}
-.btn {{ padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none; }}
-.search-bar {{ padding: 0 32px 16px; }}
-.search-input {{ padding: 10px 16px 10px 40px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 12px center; width: 320px; }}
-.search-input:focus {{ outline: none; border-color: #3B82F6; box-shadow: 0 0 0 3px #3B82F620; }}
-.btn-clear {{ background: #6B7280; }}
-.table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
-table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
-thead th {{ padding: 12px; text-align: left; font-size: 12px; font-weight: 600; color: #6B7280; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #E5E7EB; white-space: nowrap; }}
-tr {{ transition: transform .15s ease, box-shadow .15s ease; }}
-tr:hover td {{ background: #EFF6FF; }}
-tr:hover {{ transform: scaleY(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; z-index: 1; }}
-.row-actions a {{ opacity: 0.7; transition: opacity .15s, transform .15s; }}
-.row-actions a:hover {{ opacity: 1 !important; transform: scale(1.1); }}
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;background:#F0F4FA;color:#0F172A;min-height:100vh;}}
+.header{{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);color:white;padding:0 40px;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 4px 20px rgba(0,0,0,.3);position:sticky;top:0;z-index:50;}}
+.header-left h1{{font-size:18px;font-weight:700;letter-spacing:-.3px;}}
+.header-left p{{font-size:12px;opacity:.6;margin-top:2px;}}
+.header-right{{display:flex;align-items:center;gap:12px;}}
+.header-btn{{padding:7px 16px;border-radius:20px;font-size:13px;font-weight:500;text-decoration:none;transition:all .15s;}}
+.header-btn-ghost{{color:rgba(255,255,255,.8);background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);}}
+.header-btn-ghost:hover{{background:rgba(255,255,255,.15);}}
+.header-btn-primary{{color:white;background:#3b82f6;border:none;}}
+.hero{{background:linear-gradient(135deg,#1e3a5f 0%,#1e40af 100%);color:white;padding:32px 40px;display:flex;align-items:center;justify-content:space-between;gap:32px;}}
+.hero-text h2{{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:10px;}}
+.hero-summary{{font-size:14px;opacity:.85;line-height:1.7;max-width:500px;}}
+.hero-circle{{flex-shrink:0;position:relative;width:110px;height:110px;}}
+.hero-circle svg{{transform:rotate(-90deg);}}
+.hero-circle-text{{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}}
+.hero-circle-text .pct{{font-size:24px;font-weight:800;}}
+.hero-circle-text .lbl{{font-size:10px;opacity:.7;margin-top:2px;}}
+.main{{padding:28px 40px;}}
+.kpi-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:28px;}}
+.kpi-card{{background:white;border-radius:20px;padding:20px 22px;box-shadow:0 2px 12px rgba(0,0,0,.05);position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:default;}}
+.kpi-card:hover{{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1);}}
+.kpi-accent{{position:absolute;top:0;left:0;right:0;height:3px;border-radius:20px 20px 0 0;}}
+.kpi-icon{{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:12px;}}
+.kpi-num{{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;}}
+.kpi-label{{font-size:12px;color:#64748B;margin-top:4px;font-weight:500;}}
+.kpi-sub{{font-size:11px;color:#94A3B8;margin-top:6px;}}
+.progress-card{{background:white;border-radius:20px;padding:22px 28px;box-shadow:0 2px 12px rgba(0,0,0,.05);margin-bottom:28px;}}
+.progress-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}}
+.progress-header span{{font-size:14px;font-weight:600;color:#0F172A;}}
+.progress-header .pct{{font-size:22px;font-weight:800;color:#3b82f6;}}
+.bar-bg{{background:#F1F5F9;border-radius:999px;height:10px;overflow:hidden;}}
+.bar-fill{{height:100%;border-radius:999px;background:linear-gradient(90deg,#3b82f6,#6366f1);transition:width .6s ease;}}
+.bar-dots{{display:flex;gap:16px;margin-top:12px;}}
+.bar-dot{{display:flex;align-items:center;gap:5px;font-size:12px;color:#64748B;}}
+.bar-dot-circle{{width:8px;height:8px;border-radius:50%;}}
+.controls{{background:white;border-radius:20px;padding:16px 20px;box-shadow:0 2px 12px rgba(0,0,0,.05);margin-bottom:20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;}}
+.project-pill{{padding:7px 16px;border-radius:20px;font-size:13px;font-weight:600;text-decoration:none;transition:all .15s;border:1.5px solid transparent;}}
+.project-pill-active{{background:#0f172a;color:white;border-color:#0f172a;}}
+.project-pill-inactive{{background:#F8FAFC;color:#475569;border-color:#E2E8F0;}}
+.project-pill-inactive:hover{{border-color:#CBD5E1;background:#F1F5F9;}}
+.search-wrap{{position:relative;flex:1;min-width:220px;}}
+.search-wrap input{{width:100%;padding:9px 14px 9px 38px;border:1.5px solid #E2E8F0;border-radius:20px;font-size:13px;background:#F8FAFC;outline:none;transition:all .15s;}}
+.search-wrap input:focus{{border-color:#3b82f6;background:white;box-shadow:0 0 0 3px #3b82f620;}}
+.search-wrap::before{{content:"🔍";position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;}}
+select{{padding:8px 14px;border:1.5px solid #E2E8F0;border-radius:20px;font-size:13px;background:#F8FAFC;cursor:pointer;outline:none;color:#374151;}}
+.btn-reset{{padding:8px 16px;background:#F1F5F9;color:#64748B;border:none;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;transition:all .15s;}}
+.btn-reset:hover{{background:#E2E8F0;}}
+.table-card{{background:white;border-radius:20px;box-shadow:0 2px 12px rgba(0,0,0,.05);overflow:hidden;}}
+.table-card table{{width:100%;border-collapse:collapse;}}
+.table-card thead th{{padding:13px 14px;text-align:left;font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:.07em;background:#F8FAFC;border-bottom:1px solid #F1F5F9;position:sticky;top:64px;z-index:10;}}
+.table-card tbody tr{{border-bottom:1px solid #F8FAFC;transition:background .1s;}}
+.empty-state{{text-align:center;padding:60px 20px;}}
+.empty-state .icon{{font-size:48px;margin-bottom:16px;opacity:.4;}}
+.empty-state p{{color:#94A3B8;font-size:15px;}}
+@media(max-width:768px){{
+.header{{padding:0 20px;}}
+.hero{{flex-direction:column;padding:24px 20px;}}
+.hero-circle{{display:none;}}
+.main{{padding:20px;}}
+.kpi-grid{{grid-template-columns:repeat(2,1fr);}}
+.table-card table thead{{display:none;}}
+.table-card table tr{{display:block;margin-bottom:12px;border-radius:12px;border:1px solid #F1F5F9;}}
+.table-card table td{{display:flex;justify-content:space-between;padding:10px 14px;font-size:13px;border:none;border-bottom:1px solid #F8FAFC;}}
+.table-card table td:last-child{{border:none;}}
+}}
 </style>
 </head>
 <body>
+
 <div class="header">
-    <div>
-        <h1>📋 Task Dashboard</h1>
-        <a href="/calendar" style="color:rgba(255,255,255,0.85);text-decoration:none;font-size:14px;background:rgba(255,255,255,0.1);padding:7px 16px;border-radius:8px;margin-left:16px;">📅 Календарь</a>
-        <span>{title}</span>
+  <div class="header-left">
+    <h1>Executive Task Center</h1>
+    <p>Контроль задач, сроков и исполнения</p>
+  </div>
+  <div class="header-right">
+    <a href="/calendar" class="header-btn header-btn-ghost">📅 Календарь</a>
+    <a href="/newtask" class="header-btn header-btn-primary">+ Задача</a>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="hero-text">
+    <h2>Компания под контролем</h2>
+    <div class="hero-summary">
+      {overdue_text} &nbsp;·&nbsp; {all_stats['open']} задач в работе &nbsp;·&nbsp; {all_stats['done']} выполнено<br>{nearest_text}
     </div>
-</div>
-
-<div class="stats">
-    <div class="stat"><div class="num" style="color:#1E293B">{stats['total']}</div><div class="label">Всего задач</div></div>
-    <div class="stat"><div class="num" style="color:#3B82F6">{stats['open']}</div><div class="label">Открытых</div></div>
-    <div class="stat"><div class="num" style="color:#10B981">{stats['done']}</div><div class="label">Выполненных</div></div>
-    <div class="stat"><div class="num" style="color:#EF4444">{stats['overdue']}</div><div class="label">Просроченных 🔴</div></div>
-</div>
-
-<div class="progress-section">
-    <div class="progress-card">
-        <div class="progress-title">📊 Прогресс проекта</div>
-        <div class="progress-bar-wrap">
-            <div class="progress-bar-bg">
-                <div class="progress-bar-fill" style="width:{stats['percent']}%; background:{progress_color};"></div>
-            </div>
-            <div class="progress-percent">{stats['percent']}%</div>
-        </div>
-        <div class="progress-sub">Выполнено {stats['done']} из {stats['total']} задач</div>
+  </div>
+  <div class="hero-circle">
+    <svg width="110" height="110" viewBox="0 0 110 110">
+      <circle cx="55" cy="55" r="46" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="10"/>
+      <circle cx="55" cy="55" r="46" fill="none" stroke="white" stroke-width="10"
+        stroke-dasharray="{round(2*3.14159*46*all_stats['percent']/100)} {round(2*3.14159*46)}"
+        stroke-linecap="round"/>
+    </svg>
+    <div class="hero-circle-text">
+      <span class="pct">{all_stats['percent']}%</span>
+      <span class="lbl">готово</span>
     </div>
+  </div>
 </div>
 
-<div class="project-bar">
-    <a href="/" style="display:inline-block;padding:8px 16px;background:{'#1E293B' if not selected else 'white'};color:{'white' if not selected else '#6B7280'};border:2px solid {'#1E293B' if not selected else '#E5E7EB'};border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;">Все проекты</a>
-    {project_buttons}
+<div class="main">
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-accent" style="background:#3b82f6;"></div>
+    <div class="kpi-icon" style="background:#EFF6FF;">📋</div>
+    <div class="kpi-num" style="color:#0F172A;">{all_stats['total']}</div>
+    <div class="kpi-label">Всего задач</div>
+    <div class="kpi-sub">Все проекты</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-accent" style="background:#f59e0b;"></div>
+    <div class="kpi-icon" style="background:#FFFBEB;">⚡</div>
+    <div class="kpi-num" style="color:#D97706;">{all_stats['open']}</div>
+    <div class="kpi-label">В работе</div>
+    <div class="kpi-sub">Активных</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-accent" style="background:#10b981;"></div>
+    <div class="kpi-icon" style="background:#ECFDF5;">✅</div>
+    <div class="kpi-num" style="color:#059669;">{all_stats['done']}</div>
+    <div class="kpi-label">Выполнено</div>
+    <div class="kpi-sub">{all_stats['percent']}% прогресс</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-accent" style="background:#ef4444;"></div>
+    <div class="kpi-icon" style="background:#FEF2F2;">🔴</div>
+    <div class="kpi-num" style="color:#DC2626;">{all_stats['overdue']}</div>
+    <div class="kpi-label">Просрочено</div>
+    <div class="kpi-sub">{"Всё под контролем" if all_stats['overdue']==0 else "Требует внимания"}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-accent" style="background:#8b5cf6;"></div>
+    <div class="kpi-icon" style="background:#F5F3FF;">📅</div>
+    <div class="kpi-num" style="color:#7C3AED;">{today_deadline}</div>
+    <div class="kpi-label">Дедлайн сегодня</div>
+    <div class="kpi-sub">{"Нет срочных" if today_deadline==0 else "Срочно!"}</div>
+  </div>
 </div>
 
-<div class="search-bar">
-    <form method="get">
-        <input type="hidden" name="project" value="{selected}">
-        <input type="hidden" name="status" value="{status_filter}">
-        <input class="search-input" type="text" name="q" value="{search_value}" placeholder="🔍 Поиск по ID, названию, ответственному..." oninput="clearTimeout(this._t);this._t=setTimeout(()=>this.form.submit(),400)">
-    </form>
-</div>
-<div class="filters">
-    <form method="get" style="display:flex;gap:12px;align-items:center;">
-        <input type="hidden" name="project" value="{selected}">
-        <input type="hidden" name="q" value="{search_value}">
-        <select name="status" onchange="this.form.submit()">
-            <option value="">Все статусы</option>{status_options}
-        </select>
-        <a href="/" class="btn btn-clear">Сбросить</a>
-    </form>
+<div class="progress-card">
+  <div class="progress-header">
+    <span>📊 Прогресс: {title}</span>
+    <span class="pct">{stats['percent']}%</span>
+  </div>
+  <div class="bar-bg">
+    <div class="bar-fill" style="width:{stats['percent']}%;"></div>
+  </div>
+  <div class="bar-dots">
+    <div class="bar-dot"><div class="bar-dot-circle" style="background:#3b82f6;"></div>Открыто: {sum(1 for t in tasks if t['status']=='Открыта')}</div>
+    <div class="bar-dot"><div class="bar-dot-circle" style="background:#f59e0b;"></div>В работе: {sum(1 for t in tasks if t['status']=='В работе')}</div>
+    <div class="bar-dot"><div class="bar-dot-circle" style="background:#10b981;"></div>Выполнено: {stats['done']}</div>
+    <div class="bar-dot"><div class="bar-dot-circle" style="background:#ef4444;"></div>Просрочено: {stats['overdue']}</div>
+  </div>
 </div>
 
-<div class="table-wrap">
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th><th>Задача</th><th>Ответственный</th><th>Отдел</th>
-                <th>Проект</th><th>Срок</th><th>Статус</th><th>Комментарий</th><th>Действия</th>
-            </tr>
-        </thead>
-        <tbody>{rows}</tbody>
-    </table>
+{attention_html}
+
+<div class="controls">
+  <a href="/" class="project-pill {"project-pill-active" if not selected else "project-pill-inactive"}">Все проекты</a>
+  {project_buttons}
+  <form method="get" style="display:contents;">
+    <input type="hidden" name="project" value="{selected}">
+    <input type="hidden" name="status" value="{status_filter}">
+    <div class="search-wrap">
+      <input type="text" name="q" value="{search_value}" placeholder="Поиск по ID, названию, ответственному..." oninput="clearTimeout(this._t);this._t=setTimeout(()=>this.form.submit(),400)">
+    </div>
+  </form>
+  <form method="get" style="display:contents;">
+    <input type="hidden" name="project" value="{selected}">
+    <input type="hidden" name="q" value="{search_value}">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Все статусы</option>{status_options}
+    </select>
+  </form>
+  <a href="/" class="btn-reset">Сбросить</a>
 </div>
+
+<div class="table-card">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th><th>Задача</th><th>Ответственный</th><th>Проект</th>
+        <th>Срок</th><th>Статус</th><th>Комментарий</th><th>Действия</th>
+      </tr>
+    </thead>
+    <tbody>{rows if rows else '<tr><td colspan="8"><div class="empty-state"><div class="icon">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'}</tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+function toggleMenu(btn) {{
+  var menu = btn.nextElementSibling;
+  var allMenus = document.querySelectorAll('.more-dropdown');
+  allMenus.forEach(function(m) {{ if(m !== menu) m.style.display = 'none'; }});
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+  event.stopPropagation();
+}}
+document.addEventListener('click', function() {{
+  document.querySelectorAll('.more-dropdown').forEach(function(m) {{ m.style.display = 'none'; }});
+}});
+</script>
 </body>
 </html>"""
+
     return web.Response(text=html, content_type="text/html")
 
 @routes.get("/done/{task_id}")
@@ -920,3 +1103,4 @@ async def calendar_edit_save(request):
         description=data.get("description","")
     )
     raise web.HTTPFound(back)
+
