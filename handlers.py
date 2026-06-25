@@ -390,9 +390,9 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
         my_name = user["name"] if user else ""
         active = [t for t in tasks if t["status"] != "Выполнена"]
         if my_name:
-            my_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
-            other_tasks = [t for t in active if t not in my_tasks]
-            show_tasks = my_tasks[:10] + other_tasks[:5]
+            show_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
+            if not show_tasks:
+                show_tasks = active[:15]  # если нет своих — показать все
         else:
             show_tasks = active[:15]
         if not show_tasks:
@@ -851,9 +851,9 @@ async def cmd_attach(message: Message, state: FSMContext):
     my_name = user["name"] if user else ""
     active = [t for t in tasks if t["status"] != "Выполнена"]
     if my_name:
-        my_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
-        other_tasks = [t for t in active if t not in my_tasks]
-        show_tasks = my_tasks[:10] + other_tasks[:5]
+        show_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
+        if not show_tasks:
+            show_tasks = active[:15]
     else:
         show_tasks = active[:15]
     if not show_tasks:
