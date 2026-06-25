@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiohttp import web
 from config import BOT_TOKEN
 from handlers import router
-from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, morning_briefing, auto_mark_overdue, escalate_overdue, weekly_digest
+from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, morning_briefing
 from database import init_db
 from dashboard import create_app
 
@@ -56,4 +56,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
