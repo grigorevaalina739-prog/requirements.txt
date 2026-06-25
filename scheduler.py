@@ -107,9 +107,21 @@ async def check_deadline_reminders(bot: Bot):
         with get_conn() as conn:
             rows = conn.execute("SELECT * FROM users").fetchall()
             user = None
+            as_l = assignee.lower().strip()
+            as_surname = as_l.split()[0] if as_l else ""
             for row in rows:
-                if assignee.lower() in row["name"].lower() or row["name"].lower() in assignee.lower():
+                row_name = row["name"].lower().strip()
+                # Прямое совпадение
+                if as_l in row_name or row_name in as_l:
                     user = dict(row)
+                    break
+                # По фамилии
+                if len(as_surname) >= 4:
+                    for word in row_name.split():
+                        if as_surname in word or word in as_surname:
+                            user = dict(row)
+                            break
+                if user:
                     break
         if not user:
             continue
@@ -237,3 +249,4 @@ async def morning_briefing(bot: Bot):
             await bot.send_message(telegram_id, "\n".join(lines), parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Ошибка утреннего брифинга для {name}: {e}")
+
