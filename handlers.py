@@ -262,18 +262,88 @@ async def cmd_start(message: Message):
     if not tg_name:
         tg_name = message.from_user.username or f"user_{message.from_user.id}"
     register_user(message.from_user.id, tg_name)
+    menu = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📝 Новая задача", callback_data="menu_newtask")],
+        [InlineKeyboardButton(text="📋 Мои задачи", callback_data="menu_mytasks"),
+         InlineKeyboardButton(text="📊 Дашборд", callback_data="menu_dashboard")],
+        [InlineKeyboardButton(text="✅ Выполненные", callback_data="menu_done"),
+         InlineKeyboardButton(text="⚠️ Просроченные", callback_data="menu_overdue")],
+        [InlineKeyboardButton(text="📁 Проекты", callback_data="menu_projects")],
+    ])
     await message.answer(
-        f"👋 Привет, *{tg_name}*! Я агент управления задачами.\n\n"
-        "Просто напишите мне задачу — я создам её автоматически.\n\n"
-        "Или используйте команды:\n"
-        "📋 /mytasks — мои задачи\n"
-        "✅ /done <ID> — отметить выполненной\n"
-        "📎 /attach <ID> — прикрепить файл\n"
-        "💬 /comment <ID> — комментарий\n"
-        "📊 /dashboard — открыть дашборд\n"
-        "⚠️ /overdue — просроченные задачи",
+        f"👋 Добро пожаловать, *{tg_name}*!\n\nЧто хотите сделать?",
+        reply_markup=menu,
         parse_mode="Markdown"
     )
+
+
+@router.callback_query(F.data.startswith("menu_"))
+async def handle_menu(callback: CallbackQuery, state: FSMContext):
+    action = callback.data.replace("menu_", "")
+    await callback.answer()
+    if action == "newtask":
+        await state.set_state(TaskCreation.entering_text)
+        await callback.message.answer("📝 Опишите задачу — кому, что и к какому сроку:")
+    elif action == "mytasks":
+        with get_conn() as conn:
+            user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+        if not user:
+            await callback.message.answer("❌ Вы не зарегистрированы. Напишите /start")
+            return
+        name = user["name"]
+        all_tasks = get_tasks()
+        my_tasks = [t for t in all_tasks if name.lower() in (t.get("assignee") or "").lower()
+                    and t.get("status") != "Выполнена"]
+        if not my_tasks:
+            await callback.message.answer("✅ У вас нет активных задач!")
+            return
+        lines = [f"📋 *Ваши задачи, {name}:*\n"]
+        for t in my_tasks:
+            status_icon = {"Открыта": "🔵", "В работе": "🟡", "Просрочена": "🔴", "На согласовании": "🟠"}.get(t["status"], "⚪")
+            lines.append(f"{status_icon} *#{t['id']}* {t['title'][:50]}\n   📅 {t.get('deadline') or '—'} | /done {t['id']}")
+        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+    elif action == "dashboard":
+        from config import RAILWAY_PUBLIC_DOMAIN
+        url = f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else "Дашборд недоступен"
+        await callback.message.answer(
+            f"📊 *Дашборд:*\n{url}",
+            parse_mode="Markdown"
+        )
+    elif action == "done":
+        with get_conn() as conn:
+            user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+        if not user:
+            await callback.message.answer("❌ Вы не зарегистрированы. Напишите /start")
+            return
+        name = user["name"]
+        all_tasks = get_tasks()
+        done_tasks = [t for t in all_tasks if name.lower() in (t.get("assignee") or "").lower()
+                      and t.get("status") == "Выполнена"]
+        if not done_tasks:
+            await callback.message.answer("У вас пока нет выполненных задач.")
+            return
+        lines = [f"✅ *Выполненные задачи, {name}:*\n"]
+        for t in done_tasks[-10:]:
+            lines.append(f"✅ *#{t['id']}* {t['title'][:50]}")
+        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+    elif action == "overdue":
+        tasks = get_overdue_tasks()
+        if not tasks:
+            await callback.message.answer("✅ Просроченных задач нет!")
+            return
+        lines = ["⚠️ *Просроченные задачи:*\n"]
+        for t in tasks[:10]:
+            lines.append(f"🔴 *#{t['id']}* {t['title'][:50]}\n   👤 {t.get('assignee') or '—'} | 📅 {t.get('deadline')}")
+        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+    elif action == "projects":
+        projects = get_projects()
+        if not projects:
+            await callback.message.answer("Проектов пока нет.")
+            return
+        lines = ["📁 *Проекты:*\n"]
+        for p in projects:
+            lines.append(f"• {p['name']}")
+        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
 
 
 @router.message(Command("dashboard"))
