@@ -11,7 +11,8 @@ from agent import parse_task_with_ai, parse_deadline, analyze_project_tasks
 from database import (add_task, get_tasks, update_status, get_projects,
                       add_project, get_overdue_tasks, get_stats,
                       register_user, get_user_by_name, get_conn,
-                      add_task_comment, get_task_comments)
+                      add_task_comment, get_task_comments,
+                      get_task_history, log_task_change)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -1329,4 +1330,5 @@ async def cmd_delete_user(message: Message):
             conn.execute("DELETE FROM users WHERE telegram_id=?", (user["telegram_id"],))
         names = ", ".join(u["name"] for u in found)
     await message.answer(f"✅ Удалено: *{names}*", parse_mode="Markdown")
+
 
