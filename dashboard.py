@@ -122,8 +122,15 @@ async def dashboard(request):
     projects = get_projects()
     selected = request.rel_url.query.get("project", "")
     status_filter = request.rel_url.query.get("status", "")
+    search_query = request.rel_url.query.get("q", "").strip().lower()
 
     tasks = get_tasks(project=selected or None, status=status_filter or None)
+    if search_query:
+        tasks = [t for t in tasks if
+            search_query in str(t.get("id","")) or
+            search_query in (t.get("title") or "").lower() or
+            search_query in (t.get("assignee") or "").lower()
+        ]
     stats = calc_stats(tasks)
 
     project_buttons = ""
@@ -150,6 +157,7 @@ async def dashboard(request):
         for s in ["Открыта", "В работе", "Выполнена"]
     )
     rows = "".join(task_row(t, selected, status_filter) for t in tasks)
+    search_value = search_query
 
     if not tasks:
         rows = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#9CA3AF;">Задач нет</td></tr>'
@@ -185,6 +193,9 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
 .filters {{ padding: 0 32px 16px; display: flex; gap: 12px; align-items: center; }}
 select {{ padding: 8px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white; cursor: pointer; }}
 .btn {{ padding: 8px 16px; background: #3B82F6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-decoration: none; }}
+.search-bar {{ padding: 0 32px 16px; }}
+.search-input {{ padding: 10px 16px 10px 40px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 12px center; width: 320px; }}
+.search-input:focus {{ outline: none; border-color: #3B82F6; box-shadow: 0 0 0 3px #3B82F620; }}
 .btn-clear {{ background: #6B7280; }}
 .table-wrap {{ padding: 0 32px 32px; overflow-x: auto; }}
 table {{ width: 100%; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-collapse: collapse; table-layout: auto; }}
@@ -227,9 +238,17 @@ tr:hover td {{ background: #F9FAFB; }}
     {project_buttons}
 </div>
 
+<div class="search-bar">
+    <form method="get">
+        <input type="hidden" name="project" value="{selected}">
+        <input type="hidden" name="status" value="{status_filter}">
+        <input class="search-input" type="text" name="q" value="{search_value}" placeholder="🔍 Поиск по ID, названию, ответственному..." oninput="clearTimeout(this._t);this._t=setTimeout(()=>this.form.submit(),400)">
+    </form>
+</div>
 <div class="filters">
     <form method="get" style="display:flex;gap:12px;align-items:center;">
         <input type="hidden" name="project" value="{selected}">
+        <input type="hidden" name="q" value="{search_value}">
         <select name="status" onchange="this.form.submit()">
             <option value="">Все статусы</option>{status_options}
         </select>
@@ -590,3 +609,4 @@ tr:hover td {{ background: #F9FAFB; }}
 </body>
 </html>"""
     return web.Response(text=html, content_type="text/html")
+
