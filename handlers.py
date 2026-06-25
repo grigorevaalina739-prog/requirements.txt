@@ -106,20 +106,26 @@ async def notify_assignee(bot: Bot, assignee: str, title: str, project: str, dea
 
 
 def task_keyboard(parsed):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Да, создать", callback_data="confirm_task")],
+        [InlineKeyboardButton(text="✏️ Изменить", callback_data="edit_task_open")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")],
+    ])
+
+
+def task_edit_keyboard(parsed):
     def btn(key, label):
         v = parsed.get(key) or "—"
+        if len(v) > 22: v = v[:22] + "…"
         return InlineKeyboardButton(text=f"✏️ {label}: {v}", callback_data=f"edit_{key}")
     return InlineKeyboardMarkup(inline_keyboard=[
-        [btn("title", "Задача")],
+        [btn("title", "Название")],
         [btn("assignee", "Ответственный")],
-        [btn("department", "Отдел")],
         [btn("project", "Проект")],
         [btn("deadline", "Срок")],
-        [btn("description", "Комментарий")],
-        [
-            InlineKeyboardButton(text="✅ Сохранить", callback_data="confirm_task"),
-            InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task"),
-        ]
+        [btn("department", "Отдел")],
+        [InlineKeyboardButton(text="✅ Сохранить", callback_data="confirm_task"),
+         InlineKeyboardButton(text="◀️ Назад", callback_data="edit_task_back")],
     ])
 
 
@@ -165,15 +171,13 @@ def format_one_of_multiple(task, idx, total):
 
 
 def format_task_text(parsed):
+    deadline = parsed.get('deadline') or '—'
     return (
-        f"📋 *Проверьте задачу:*\n\n"
-        f"📌 *Задача:* {parsed.get('title') or '—'}\n"
-        f"👤 *Ответственный:* {parsed.get('assignee') or '—'}\n"
-        f"🏢 *Отдел:* {parsed.get('department') or '—'}\n"
-        f"📁 *Проект:* {parsed.get('project') or '—'}\n"
-        f"📅 *Срок:* {parsed.get('deadline') or '—'}\n"
-        f"💬 *Комментарий:* {parsed.get('description') or '—'}\n\n"
-        f"_Нажмите поле чтобы изменить._"
+        f"📌 *Название*\n{parsed.get('title') or '—'}\n\n"
+        f"👤 *Ответственный*\n{parsed.get('assignee') or '—'}\n\n"
+        f"📅 *Срок*\n{deadline}\n\n"
+        f"📁 *Проект*\n{parsed.get('project') or '—'}\n\n"
+        f"Всё верно?"
     )
 
 
@@ -931,6 +935,22 @@ async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
 
 
 # ─── Редактирование одной задачи (при создании) ───────────────────────────
+@router.callback_query(F.data == "edit_task_open", TaskCreation.confirming)
+async def open_edit_form(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    parsed = data.get("parsed", {})
+    await callback.message.edit_text(format_task_text(parsed), reply_markup=task_edit_keyboard(parsed), parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.callback_query(F.data == "edit_task_back", TaskCreation.confirming)
+async def back_to_confirm(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    parsed = data.get("parsed", {})
+    await callback.message.edit_text(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("edit_"), TaskCreation.confirming)
 async def edit_field(callback: CallbackQuery, state: FSMContext):
     field = callback.data.replace("edit_", "")
@@ -1165,54 +1185,10 @@ async def universal_task_creator(message: Message, state: FSMContext):
     project = parsed.get("project", "")
     projects = get_projects()
 
-    # Если ответственный не распознан — показываем список руководителей
-    if not parsed.get("assignee"):
-        await state.update_data(parsed=parsed)
-        await state.set_state(TaskCreation.choosing_assignee)
-        await message.answer(
-            f"📌 *{parsed.get('title', '—')}*\n"
-            f"📅 {parsed.get('deadline') or '—'}\n\n"
-            "👤 Выберите ответственного:",
-            reply_markup=managers_keyboard(),
-            parse_mode="Markdown"
-        )
-        return
-
-    # Если проект не распознан — спрашиваем
-    if not project and projects:
-        await state.update_data(parsed=parsed)
-        await state.set_state(TaskCreation.choosing_project)
-        await message.answer(
-            f"📌 *{parsed.get('title', '—')}*\n"
-            f"👤 {parsed.get('assignee') or '—'} | 📅 {parsed.get('deadline') or '—'}\n\n"
-            "📁 В какой проект?",
-            reply_markup=projects_keyboard(projects),
-            parse_mode="Markdown"
-        )
-        return
-
-    # Сохраняем сразу
-    if not project:
-        project = "Общие"
-    task_id = add_task(
-        project=project,
-        assignee=parsed.get("assignee") or "",
-        department=parsed.get("department") or "",
-        title=parsed.get("title") or message.text[:100],
-        deadline=parsed.get("deadline") or "",
-        comment=parsed.get("description") or "",
-    )
-    await notify_assignee(message.bot, parsed.get("assignee") or "", parsed.get("title") or "", project, parsed.get("deadline") or "")
-
-    assignee_str = parsed.get("assignee") or "—"
-    deadline_str = parsed.get("deadline") or "—"
-    await message.answer(
-        f"✅ *Задача #{task_id} создана!*\n\n"
-        f"📌 {parsed.get('title')}\n"
-        f"👤 {assignee_str} | 📁 {project} | 📅 {deadline_str}\n\n"
-        f"_Используйте /done {task_id} когда выполните_",
-        parse_mode="Markdown"
-    )
+    # Сразу показываем карточку — без промежуточных вопросов
+    await state.update_data(parsed=parsed)
+    await state.set_state(TaskCreation.confirming)
+    await message.answer(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
 
 
 
