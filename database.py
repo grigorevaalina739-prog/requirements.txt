@@ -75,6 +75,17 @@ def init_db():
             new_value TEXT DEFAULT '',
             changed_at TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS meetings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            project TEXT DEFAULT '',
+            date TEXT NOT NULL,
+            time_start TEXT DEFAULT '',
+            time_end TEXT DEFAULT '',
+            participants TEXT DEFAULT '',
+            description TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
         CREATE TABLE IF NOT EXISTS task_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             task_id INTEGER NOT NULL,
@@ -225,3 +236,42 @@ def get_task_history(task_id: int):
             (task_id,)
         ).fetchall()]
 
+
+
+
+def add_meeting(title, project, date, time_start, time_end, participants, description):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO meetings (title, project, date, time_start, time_end, participants, description) VALUES (?,?,?,?,?,?,?)",
+            (title, project, date, time_start, time_end, participants, description)
+        )
+    return True
+
+def get_meetings(month=None, project=None):
+    with get_conn() as conn:
+        q = "SELECT * FROM meetings"
+        conditions = []
+        params = []
+        if month:
+            conditions.append("date LIKE ?")
+            params.append(f"{month}%")
+        if project:
+            conditions.append("project=?")
+            params.append(project)
+        if conditions:
+            q += " WHERE " + " AND ".join(conditions)
+        q += " ORDER BY date, time_start"
+        return [dict(r) for r in conn.execute(q, params).fetchall()]
+
+def delete_meeting(meeting_id):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
+    return True
+
+def update_meeting(meeting_id, title, project, date, time_start, time_end, participants, description):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE meetings SET title=?, project=?, date=?, time_start=?, time_end=?, participants=?, description=? WHERE id=?",
+            (title, project, date, time_start, time_end, participants, description, meeting_id)
+        )
+    return True
