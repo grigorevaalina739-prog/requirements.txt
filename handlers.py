@@ -273,6 +273,7 @@ async def cmd_start(message: Message):
          InlineKeyboardButton(text="📊 Дашборд", callback_data="menu_dashboard")],
         [InlineKeyboardButton(text="✅ Выполненные", callback_data="menu_done"),
          InlineKeyboardButton(text="⚠️ Просроченные", callback_data="menu_overdue")],
+        [InlineKeyboardButton(text="📎 Прикрепить файл", callback_data="menu_attach")],
         [InlineKeyboardButton(text="📁 Проекты", callback_data="menu_projects"),
          InlineKeyboardButton(text="🆕 Новый проект", callback_data="menu_newproject")],
     ])
@@ -382,6 +383,32 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
         for t in tasks[:10]:
             lines.append(f"🔴 *#{t['id']}* {t['title'][:50]}\n   👤 {t.get('assignee') or '—'} | 📅 {t.get('deadline')}")
         await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+    elif action == "attach":
+        tasks = get_tasks()
+        with get_conn() as conn:
+            user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+        my_name = user["name"] if user else ""
+        active = [t for t in tasks if t["status"] != "Выполнена"]
+        if my_name:
+            my_tasks = [t for t in active if my_name.split()[0].lower() in (t.get("assignee") or "").lower()]
+            other_tasks = [t for t in active if t not in my_tasks]
+            show_tasks = my_tasks[:10] + other_tasks[:5]
+        else:
+            show_tasks = active[:15]
+        if not show_tasks:
+            await callback.message.answer("📋 Нет активных задач.")
+            await callback.answer()
+            return
+        buttons = []
+        for t in show_tasks:
+            short = t["title"][:42] + "…" if len(t["title"]) > 42 else t["title"]
+            buttons.append([InlineKeyboardButton(text=f"#{t['id']} {short}", callback_data=f"attach_pick_{t['id']}")])
+        buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_task")])
+        await callback.message.answer(
+            "📎 *Выберите задачу:*",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+            parse_mode="Markdown"
+        )
     elif action == "projects":
         projects = get_projects()
         if not projects:
