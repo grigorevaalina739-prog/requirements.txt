@@ -323,12 +323,29 @@ async def dashboard(request):
         for name, cnt in workload_sorted
     ) if workload_sorted else '<div style="font-size:12px;color:var(--muted);">Нет данных</div>'
     upcoming_html = ""
+    seen_dl = set()
     for t in upcoming:
+        key = t["title"][:40]
+        if key in seen_dl:
+            continue
+        seen_dl.add(key)
         try:
             mon = MONTHS_RU.get(int(t["deadline"][5:7]), "")[:3]
+            day = t["deadline"][8:]
         except Exception:
-            mon = ""
-        upcoming_html += f'<div class="sb-deadline"><div class="sb-dl-date"><div class="day">{t["deadline"][8:]}</div><div class="mon">{mon}</div></div><div class="sb-dl-info"><div class="title">{t["title"][:38]}</div><div class="who">{t.get("assignee") or "—"}</div></div></div>'
+            mon = ""; day = "—"
+        short_title = t["title"][:32] + ("…" if len(t["title"]) > 32 else "")
+        assignee = (t.get("assignee") or "—").split()[0] if t.get("assignee") else "—"
+        upcoming_html += (
+            f'<div class="sb-dl" style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);">' +
+            f'<div class="dl-date" style="min-width:34px;height:34px;background:rgba(59,130,246,.1);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;">' +
+            f'<div style="font-size:13px;font-weight:800;color:#3b82f6;line-height:1;">{day}</div>' +
+            f'<div style="font-size:9px;color:#64748b;">{mon}</div></div>' +
+            f'<div style="min-width:0;flex:1;">' +
+            f'<div style="font-size:12px;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{t["title"]}">{short_title}</div>' +
+            f'<div style="font-size:11px;color:#64748b;margin-top:1px;">{assignee}</div>' +
+            f'</div></div>'
+        )
     if not upcoming_html:
         upcoming_html = '<div style="font-size:12px;color:var(--muted);">Нет предстоящих дедлайнов</div>'
     pill_all_class = "pill pill-active" if not selected else "pill"
