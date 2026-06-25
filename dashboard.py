@@ -68,7 +68,7 @@ def task_row(t, project_filter="", status_filter=""):
     if comments:
         last = comments[-1]
         comment_text = f"📎 {last['file_name']}" if last.get("file_id") else f"{last['text'][:60]}"
-        comment_html = f'<span style="color:#64748B;font-size:12px;">{comment_text}</span>'
+        comment_html = f'<span style="color:#475569;font-size:12px;">{comment_text}</span>'
         if len(comments) > 1:
             comment_html += f' <span style="background:#F1F5F9;color:#94A3B8;padding:1px 6px;border-radius:10px;font-size:11px;">{len(comments)}</span>'
     else:
@@ -93,13 +93,13 @@ def task_row(t, project_filter="", status_filter=""):
             '<div style="display:flex;align-items:center;gap:8px;">'
             f'<div style="width:28px;height:28px;border-radius:50%;background:{av_bg};color:{av_color};'
             f'font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">{initials}</div>'
-            f'<span style="font-size:13px;color:#e2e8f0;">{assignee}</span></div>'
+            f'<span style="font-size:13px;color:#334155;">{assignee}</span></div>'
         )
     else:
         assignee_html = '<span style="color:#CBD5E1;">—</span>'
 
     back_url = f"/?project={project_filter}&status={status_filter}"
-    row_border = "border-left:3px solid #EF4444;" if overdue else "border-left:3px solid transparent;"
+    row_border = "border-left:3px solid #e05c5c;" if overdue else "border-left:3px solid transparent;"
 
     tid = t['id']
     if t["status"] == "Выполнена":
@@ -136,7 +136,7 @@ def task_row(t, project_filter="", status_filter=""):
         f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
         f'<td style="padding:14px 12px;color:#94A3B8;font-size:12px;font-weight:600;white-space:nowrap;">#{tid}</td>'
         f'<td style="padding:14px 12px;min-width:220px;max-width:320px;">'
-        f'<div style="font-weight:500;font-size:14px;color:#f1f5f9;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
+        f'<div style="font-weight:500;font-size:14px;color:#0f172a;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
         f'</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
