@@ -214,6 +214,7 @@ tr:hover {{ transform: scaleY(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.08); po
 <div class="header">
     <div>
         <h1>📋 Task Dashboard</h1>
+        <a href="/calendar" style="color:rgba(255,255,255,0.85);text-decoration:none;font-size:14px;background:rgba(255,255,255,0.1);padding:7px 16px;border-radius:8px;margin-left:16px;">📅 Календарь</a>
         <span>{title}</span>
     </div>
 </div>
