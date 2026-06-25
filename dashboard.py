@@ -57,6 +57,9 @@ def task_row(t, project_filter="", status_filter=""):
         "Открыта": "#3B82F6",
         "В работе": "#F59E0B",
         "Выполнена": "#10B981",
+        "На согласовании": "#F97316",
+        "Просрочена": "#EF4444",
+        "Заблокирована": "#1F2937",
     }.get(t["status"], "#6B7280")
     row_bg = "#FFF5F5" if overdue else "white"
 
@@ -111,7 +114,7 @@ def task_row(t, project_filter="", status_filter=""):
 def calc_stats(tasks):
     today = datetime.now().strftime("%Y-%m-%d")
     total = len(tasks)
-    open_ = sum(1 for t in tasks if t["status"] == "Открыта")
+    open_ = sum(1 for t in tasks if t["status"] in ("Открыта", "В работе", "На согласовании"))
     done = sum(1 for t in tasks if t["status"] == "Выполнена")
     overdue = sum(1 for t in tasks if t["status"] != "Выполнена" and t["deadline"] and t["deadline"] < today)
     percent = round((done / total * 100) if total > 0 else 0)
@@ -154,7 +157,7 @@ async def dashboard(request):
 
     status_options = "".join(
         f'<option value="{s}" {"selected" if s==status_filter else ""}>{s}</option>'
-        for s in ["Открыта", "В работе", "Выполнена"]
+        for s in ["Открыта", "В работе", "Выполнена", "На согласовании", "Просрочена", "Заблокирована"]
     )
     rows = "".join(task_row(t, selected, status_filter) for t in tasks)
     search_value = search_query
@@ -310,7 +313,7 @@ async def edit_task_page(request):
     )
     status_options = "".join(
         f'<option value="{s}" {"selected" if s == task["status"] else ""}>{s}</option>'
-        for s in ["Открыта", "В работе", "Выполнена"]
+        for s in ["Открыта", "В работе", "Выполнена", "На согласовании", "Просрочена", "Заблокирована"]
     )
     html = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -554,7 +557,7 @@ async def task_history_page(request):
 
     field_labels = {"status": "Статус", "title": "Задача", "assignee": "Ответственный",
                     "department": "Отдел", "project": "Проект", "deadline": "Срок", "comment": "Комментарий"}
-    status_colors = {"Выполнена": "#10B981", "Открыта": "#3B82F6", "В работе": "#F59E0B"}
+    status_colors = {"Выполнена": "#10B981", "Открыта": "#3B82F6", "В работе": "#F59E0B", "На согласовании": "#F97316", "Просрочена": "#EF4444", "Заблокирована": "#1F2937"}
 
     rows_html = ""
     for h in history:
