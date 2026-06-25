@@ -559,15 +559,6 @@ async def dashboard(request):
         "  </div>\n</div>\n"
     )
 
-    # attention
-    html += (
-        "<div class=\"att-card\">\n"
-        f"  <div class=\"att-title\">⚠️ Требует внимания "
-        f"<span style=\"background:rgba(239,68,68,.15);color:#ef4444;padding:2px 8px;border-radius:10px;font-size:10px;\">{attention_count}</span></div>\n"
-        f"  {attention_rows}\n"
-        "</div>\n"
-    )
-
     # controls
     all_pill = "pill pill-active" if not selected else "pill"
     html += (
@@ -596,6 +587,15 @@ async def dashboard(request):
         "<thead><tr><th>ID</th><th>Задача</th><th>Ответственный</th><th>Проект</th>"
         "<th>Срок</th><th>Статус</th><th>Комментарии</th><th>Действия</th></tr></thead>\n"
         f"<tbody>{table_body}</tbody>\n</table>\n</div>\n"
+    )
+
+    # attention (moved below table)
+    html += (
+        "<div class=\"att-card\" style=\"margin-top:18px;\">\n"
+        f"  <div class=\"att-title\">⚠️ Требует внимания "
+        f"<span style=\"background:rgba(239,68,68,.15);color:#ef4444;padding:2px 8px;border-radius:10px;font-size:10px;\">{attention_count}</span></div>\n"
+        f"  {attention_rows}\n"
+        "</div>\n"
     )
 
     html += "</div>\n"  # /content
