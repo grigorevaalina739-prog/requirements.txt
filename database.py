@@ -15,7 +15,7 @@ def get_conn():
 
 def seed_bord_16_06():
     """Разовый импорт задач с Борд 16.06.2026."""
-    PROJECT = 'Борд 16.06.2026'
+    PROJECT = 'Board Miniso'
     add_project(PROJECT)
     TASKS = [{"assignee": "Мустафина А.", "title": "Подготовить письмо в Форум о переносе ярмарки", "status": "Выполнена", "comment": ""}, {"assignee": "Турбина Е.", "title": "Распределить ассортимент FIFA и Star Wars по магазинам согласно рейтингу и потенциалу продаж", "status": "Открыта", "comment": ""}, {"assignee": "Оспанова А.", "title": "Реструктурировать операционный отдел: Операционный менеджер, Мерчендайзер, 2 супервайзера", "status": "Открыта", "comment": ""}, {"assignee": "Мырзагали Е.", "title": "Разработать и утвердить процесс контроля сроков годности товаров", "status": "Открыта", "comment": "совместно с Турбина Е."}, {"assignee": "Турбина Е.", "title": "Разработать и утвердить процесс контроля сроков годности товаров", "status": "Открыта", "comment": "совместно с Мырзагали Е."}, {"assignee": "Мырзагали Е.", "title": "Организовать перестикеровку 13 товаров в связи с требованиями СЭС", "status": "Открыта", "comment": ""}, {"assignee": "Луданная Л.", "title": "Разработать шаблоны POSM-материалов для магазинов", "status": "Открыта", "comment": ""}, {"assignee": "Мустафина А.", "title": "Подготовить письмо в Москву по вопросу отмены работы магазинов за 2 дня в связи с отсутствием электроснабжения", "status": "Открыта", "comment": ""}]
     with get_conn() as conn:
@@ -31,6 +31,13 @@ def seed_bord_16_06():
                 "INSERT INTO tasks (project, assignee, department, title, deadline, status, comment) VALUES (?,?,?,?,?,?,?)",
                 (PROJECT, t['assignee'], '', t['title'], '', t['status'], t['comment'])
             )
+
+
+def migrate_bord_to_miniso():
+    """Переносит задачи из Борд 16.06.2026 в Board Miniso и удаляет старый проект."""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET project='Board Miniso' WHERE project='Борд 16.06.2026'")
+        conn.execute("DELETE FROM projects WHERE name='Борд 16.06.2026'")
 
 def cleanup_users():
     """Удаляет указанных пользователей из базы при запуске."""
@@ -114,6 +121,7 @@ def add_project(name):
 
 # Запускаем очистку при старте
 cleanup_users()
+migrate_bord_to_miniso()
 seed_bord_16_06()
 
 def add_task(project, assignee, department, title, deadline, comment="", status="Открыта"):
@@ -275,3 +283,4 @@ def update_meeting(meeting_id, title, project, date, time_start, time_end, parti
             (title, project, date, time_start, time_end, participants, description, meeting_id)
         )
     return True
+
