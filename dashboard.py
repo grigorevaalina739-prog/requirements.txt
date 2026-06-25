@@ -280,10 +280,14 @@ async def dashboard(request):
         if tt.get("deadline","") and tt["deadline"] < today_str and tt["status"] != "Выполнена":
             attention_rows += f'<div class="att-row att-over"><span class="att-icon">🔴</span><span class="att-text">Просрочена: <b>{tt["title"][:55]}</b></span><span class="att-who">{tt.get("assignee") or "—"}</span></div>'
             attention_count += 1
+    seen_titles = set()
     for tt in all_tasks_full:
         if tt["status"] != "Выполнена":
+            if tt["title"] in seen_titles:
+                continue
             cmts = get_task_comments(tt["id"])
             if not cmts:
+                seen_titles.add(tt["title"])
                 attention_rows += f'<div class="att-row att-info"><span class="att-icon">💬</span><span class="att-text">Нет комментариев: <b>{tt["title"][:55]}</b></span><span class="att-who">{tt.get("assignee") or "—"}</span></div>'
                 attention_count += 1
                 if attention_count >= 8:
