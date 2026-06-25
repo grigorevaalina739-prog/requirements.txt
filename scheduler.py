@@ -185,3 +185,55 @@ async def weekly_digest(bot: Bot):
             await bot.send_message(telegram_id, "\n".join(lines), parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Ошибка дайджеста для {name}: {e}")
+
+
+async def morning_briefing(bot: Bot):
+    """Утренний брифинг каждому сотруднику в 9:00."""
+    logger.info("Отправка утреннего брифинга...")
+    try:
+        users = get_all_users()
+    except Exception:
+        return
+    all_tasks = get_tasks()
+    today = datetime.now().strftime("%Y-%m-%d")
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    for user in users:
+        name = user["name"]
+        telegram_id = user["telegram_id"]
+        my_tasks = [t for t in all_tasks if name.lower() in (t.get("assignee") or "").lower()
+                    and t.get("status") not in ("Выполнена",)]
+        if not my_tasks:
+            continue
+
+        overdue = [t for t in my_tasks if t.get("deadline") and t["deadline"] < today]
+        due_today = [t for t in my_tasks if t.get("deadline") == today]
+        due_tomorrow = [t for t in my_tasks if t.get("deadline") == tomorrow]
+        active = [t for t in my_tasks if t not in overdue and t not in due_today and t not in due_tomorrow]
+
+        lines = [f"☀️ Доброе утро, *{name}*!\n"]
+
+        if overdue:
+            lines.append(f"🔴 *{len(overdue)} просроченных:*")
+            for t in overdue[:3]:
+                lines.append(f"  • #{t['id']} {t['title'][:45]} — /done {t['id']}")
+
+        if due_today:
+            lines.append(f"\n🚨 *{len(due_today)} срок сегодня:*")
+            for t in due_today:
+                lines.append(f"  • #{t['id']} {t['title'][:45]} — /done {t['id']}")
+
+        if due_tomorrow:
+            lines.append(f"\n⏰ *{len(due_tomorrow)} срок завтра:*")
+            for t in due_tomorrow:
+                lines.append(f"  • #{t['id']} {t['title'][:45]}")
+
+        if active:
+            lines.append(f"\n🟡 *Остальных задач: {len(active)}*")
+
+        lines.append(f"\n_Всего активных: {len(my_tasks)}_")
+
+        try:
+            await bot.send_message(telegram_id, "\n".join(lines), parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Ошибка утреннего брифинга для {name}: {e}")
