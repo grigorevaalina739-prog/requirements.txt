@@ -1010,7 +1010,7 @@ async def attach_task_page(request):
             f'<div style="font-size:12px;color:#64748b;margin-top:2px;">👤 {f["author"]} · 🕐 {dt}</div>' +
             comment_bit +
             f'</div>' +
-            f'<a href="{dl}" download="{fname}" style="flex-shrink:0;padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">⬇️ Скачать</a>' +
+            f'<div style="display:flex;gap:6px;flex-shrink:0;">' +f'<a href="{dl}" target="_blank" style="padding:7px 12px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">👁️ Открыть</a>' +f'<a href="{dl}" download="{fname}" style="padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">⬇️ Скачать</a>' +f'</div>' +
             f'</div>'
         )
     if not files_html:
