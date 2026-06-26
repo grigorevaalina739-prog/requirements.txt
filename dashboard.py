@@ -930,11 +930,24 @@ async def download_file(request):
 async def admin_dedup(request):
     from database import get_conn
     with get_conn() as conn:
+        # Show all tasks first
+        all_tasks = conn.execute("SELECT id, title, assignee, project, status FROM tasks ORDER BY title").fetchall()
+        lines = ["ID | TITLE | ASSIGNEE | PROJECT | STATUS"]
+        for t in all_tasks:
+            lines.append(f"#{t[0]} | {t[1][:50]} | {t[2]} | {t[3]} | {t[4]}")
+    return web.Response(text="\n".join(lines), content_type="text/plain")
+
+
+@routes.get("/admin/dedup2")
+async def admin_dedup2(request):
+    from database import get_conn
+    with get_conn() as conn:
         before = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+        # Delete by same title only (ignore assignee)
         conn.execute("""
             DELETE FROM tasks WHERE id NOT IN (
                 SELECT MIN(id) FROM tasks
-                GROUP BY LOWER(TRIM(title)), LOWER(TRIM(COALESCE(assignee,''))), LOWER(TRIM(COALESCE(project,'')))
+                GROUP BY LOWER(TRIM(title)), LOWER(TRIM(COALESCE(project,'')))
             ) AND status != 'Архив'
         """)
         after = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
