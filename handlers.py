@@ -1192,6 +1192,9 @@ async def cmd_done(message: Message):
         user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
     author = user["name"] if user else (message.from_user.first_name or "Неизвестно")
     update_status(task_id, "Выполнена", changed_by=author)
+    # Запоминаем паттерн выполненной задачи
+    from agent import learn_from_task
+    await learn_from_task(task_id)
     await message.answer(f"✅ Задача #{task_id} выполнена! Записано: {author}")
 
 
