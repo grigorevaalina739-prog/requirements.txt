@@ -584,22 +584,66 @@ async def dashboard(request):
         "  </div>\n</div>\n"
     )
 
-    # controls
+    # controls + filters
+    assignee_filter = request.rel_url.query.get("assignee", "")
+    deadline_filter = request.rel_url.query.get("deadline_filter", "")
+    sort_by = request.rel_url.query.get("sort", "")
+    sort_dir = request.rel_url.query.get("dir", "asc")
+
+    # Apply assignee filter
+    if assignee_filter:
+        tasks = [t for t in tasks if assignee_filter.lower() in (t.get("assignee") or "").lower()]
+    # Apply deadline filter
+    if deadline_filter == "today":
+        tasks = [t for t in tasks if t.get("deadline") == today_str]
+    elif deadline_filter == "week":
+        from datetime import date as _d2, timedelta as _td2
+        week_end = (_d2.today() + _td2(days=7)).strftime("%Y-%m-%d")
+        tasks = [t for t in tasks if t.get("deadline","") and today_str <= t["deadline"] <= week_end]
+    elif deadline_filter == "overdue":
+        tasks = [t for t in tasks if t.get("deadline","") and t["deadline"] < today_str and t.get("status") != "Выполнена"]
+    # Apply sorting
+    if sort_by == "assignee":
+        tasks = sorted(tasks, key=lambda t: (t.get("assignee") or ""), reverse=(sort_dir=="desc"))
+    elif sort_by == "deadline":
+        tasks = sorted(tasks, key=lambda t: (t.get("deadline") or "9999"), reverse=(sort_dir=="desc"))
+    elif sort_by == "status":
+        tasks = sorted(tasks, key=lambda t: (t.get("status") or ""), reverse=(sort_dir=="desc"))
+    elif sort_by == "id":
+        tasks = sorted(tasks, key=lambda t: t.get("id",0), reverse=(sort_dir=="desc"))
+
+    # Rebuild rows after filtering/sorting
+    rows = "".join(task_row(t, selected, status_filter) for t in tasks)
+
+    # Assignee dropdown
+    all_assignees = sorted(set(t.get("assignee","") for t in get_tasks() if t.get("assignee")))
+    assignee_opts = "<option value=''>Все ответственные</option>" + "".join(
+        f'<option value="{a}" {"selected" if a==assignee_filter else ""}>{a}</option>'
+        for a in all_assignees
+    )
+    deadline_opts = (
+        f'<option value="">Все сроки</option>'
+        f'<option value="today" {"selected" if deadline_filter=="today" else ""}>Сегодня</option>'
+        f'<option value="week" {"selected" if deadline_filter=="week" else ""}>Эта неделя</option>'
+        f'<option value="overdue" {"selected" if deadline_filter=="overdue" else ""}>Просроченные</option>'
+    )
+
     all_pill = "pill pill-active" if not selected else "pill"
     html += (
         "<div class=\"ctrl-bar\">\n"
         f"  <a href=\"/\" class=\"{all_pill}\">Все проекты</a>\n"
         f"  {project_pills}\n"
+        "</div>\n"
+        "<div class=\"ctrl-bar\" style=\"margin-top:8px;\">\n"
         "  <form method=\"get\" style=\"display:contents;\">\n"
         f"    <input type=\"hidden\" name=\"project\" value=\"{selected}\">\n"
-        f"    <input type=\"hidden\" name=\"status\" value=\"{status_filter}\">\n"
+        f"    <input type=\"hidden\" name=\"sort\" value=\"{sort_by}\">\n"
+        f"    <input type=\"hidden\" name=\"dir\" value=\"{sort_dir}\">\n"
         "    <div class=\"srch\"><span class=\"srch-ico\">🔍</span>"
-        f"<input type=\"text\" name=\"q\" value=\"{search_value}\" placeholder=\"Поиск по ID, названию, ответственному...\" oninput=\"clearTimeout(this._t);this._t=setTimeout(()=>this.form.submit(),400)\"></div>\n"
-        "  </form>\n"
-        "  <form method=\"get\" style=\"display:contents;\">\n"
-        f"    <input type=\"hidden\" name=\"project\" value=\"{selected}\">\n"
-        f"    <input type=\"hidden\" name=\"q\" value=\"{search_value}\">\n"
+        f"<input type=\"text\" name=\"q\" value=\"{search_value}\" placeholder=\"Поиск...\" oninput=\"clearTimeout(this._t);this._t=setTimeout(()=>this.form.submit(),400)\"></div>\n"
         f"    <select name=\"status\" onchange=\"this.form.submit()\"><option value=\"\">Все статусы</option>{status_options}</select>\n"
+        f"    <select name=\"assignee\" onchange=\"this.form.submit()\">{assignee_opts}</select>\n"
+        f"    <select name=\"deadline_filter\" onchange=\"this.form.submit()\">{deadline_opts}</select>\n"
         "  </form>\n"
         "  <a href=\"/\" class=\"btn-reset\">Сбросить</a>\n"
         "</div>\n"
