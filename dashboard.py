@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web, ClientSession
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task, delete_task_comment
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task, delete_task_comment, predict_project, learn_project_from_task
 from datetime import datetime, date
 from config import BOT_TOKEN
 
@@ -1256,8 +1256,12 @@ async def agent_parse(request):
         if not result:
             return web.json_response({"error": "Не удалось распознать задачу"})
         # Если нет проекта — подставляем первый доступный
-        # Если проект не определён — не подставляем дефолт, пусть пользователь выберет
-        # Но передаём список проектов для подсказки
+        # Если AI не определил проект — используем ML предсказание
+        if not result.get("project"):
+            predicted = predict_project(result.get("title", "") + " " + text)
+            if predicted:
+                result["project"] = predicted
+                result["_project_predicted"] = True  # флаг что предсказано, не уверены
         result["_projects"] = [p["name"] for p in get_projects()]
         return web.json_response(result)
     except Exception as e:
@@ -1268,14 +1272,18 @@ async def agent_parse(request):
 async def agent_create(request):
     """Создание задачи из агента."""
     data = await request.json()
+    title = data.get("title", "Без названия")
+    project = data.get("project", "Общие")
     task_id = add_task(
-        project=data.get("project", "Общие"),
+        project=project,
         assignee=data.get("assignee", ""),
         department=data.get("department", ""),
-        title=data.get("title", "Без названия"),
+        title=title,
         deadline=data.get("deadline", ""),
         comment=data.get("description", ""),
     )
+    # Учимся — запоминаем связь слов задачи с проектом
+    learn_project_from_task(title, project)
     return web.json_response({"task_id": task_id, "ok": True})
 
 def create_app():
