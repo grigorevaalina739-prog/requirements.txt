@@ -509,8 +509,12 @@ async def dashboard(request):
     # topbar
     html += (
         "<div class=\"topbar\">\n"
-        "  <div class=\"topbar-brand\"><div class=\"logo\">⚡</div><div>"
-        "<h1>EXECUTIVE COMMAND CENTER</h1>"
+        "  <div class=\"topbar-brand\">"
+        "<svg width=\"90\" height=\"30\" viewBox=\"0 0 90 30\" xmlns=\"http://www.w3.org/2000/svg\" style=\"flex-shrink:0;border-radius:4px;\">"
+        "<rect width=\"90\" height=\"30\" fill=\"white\" rx=\"3\"/>"
+        "<text x=\"45\" y=\"21\" font-family=\"Arial,sans-serif\" font-size=\"13\" font-weight=\"900\" fill=\"#CC0000\" text-anchor=\"middle\" letter-spacing=\"2.5\">MINISO</text>"
+        "</svg>"
+        "<div style=\"margin-left:10px;\"><h1>EXECUTIVE COMMAND CENTER</h1>"
         "<p>Контроль задач, сроков и исполнения</p>"
         "</div></div>\n"
         "  <div class=\"topbar-right\">"
