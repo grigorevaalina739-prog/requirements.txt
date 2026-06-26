@@ -68,12 +68,21 @@ def task_row(t, project_filter="", status_filter=""):
     comments = get_task_comments(t["id"])
     if comments:
         last = comments[-1]
-        comment_text = f"📎 {last['file_name']}" if last.get("file_id") else f"{last['text'][:60]}"
-        comment_html = f'<span style="color:#475569;font-size:12px;">{comment_text}</span>'
-        if len(comments) > 1:
-            comment_html += f' <span style="background:#F1F5F9;color:#94A3B8;padding:1px 6px;border-radius:10px;font-size:11px;">{len(comments)}</span>'
+        files_count = sum(1 for c in comments if c.get("file_id"))
+        if last.get("file_id"):
+            fname = (last.get("file_name") or "файл")[:25]
+            comment_html = (
+                f'<a href="/attach/{tid}" style="display:inline-flex;align-items:center;gap:4px;color:#1d4ed8;font-size:12px;text-decoration:none;" title="{fname}">'  
+                f'📎 <span style="max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;">{fname}</span></a>'
+            )
+            if files_count > 1:
+                comment_html += f' <span style="background:#EFF6FF;color:#1d4ed8;padding:1px 5px;border-radius:8px;font-size:11px;">{files_count}</span>'
+        else:
+            comment_html = f'<a href="/comment/{tid}" style="color:#7c3aed;font-size:12px;text-decoration:none;">💬 {last["text"][:25]}</a>'
+            if len(comments) > 1:
+                comment_html += f' <span style="background:#F1F5F9;color:#94A3B8;padding:1px 5px;border-radius:8px;font-size:11px;">{len(comments)}</span>'
     else:
-        comment_html = '<span style="color:#CBD5E1;">—</span>'
+        comment_html = f'<a href="/attach/{tid}" style="color:#94a3b8;font-size:12px;text-decoration:none;" title="Прикрепить файл">📎 —</a>'
 
     pc = get_project_color(t["project"])
     project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
