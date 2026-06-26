@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web, ClientSession
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task, delete_task_comment
 from datetime import datetime, date
 from config import BOT_TOKEN
 
@@ -1148,7 +1148,7 @@ async def attach_task_page(request):
             f'<div style="font-size:12px;color:#64748b;margin-top:2px;">👤 {f["author"]} · 🕐 {dt}</div>' +
             comment_bit +
             f'</div>' +
-            f'<div style="display:flex;gap:6px;flex-shrink:0;">' +f'<a href="/file/view/{fid}?name={fname}" target="_blank" style="padding:7px 12px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">👁️ Открыть</a>' +f'<a href="/file/{fid}?name={fname}" download="{fname}" style="padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">⬇️ Скачать</a>' +f'</div>' +
+            f'<div style="display:flex;gap:6px;flex-shrink:0;">'+ f'<a href="/file/view/{fid}?name={fname}" target="_blank" style="padding:7px 12px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">👁️ Открыть</a>'+ f'<a href="/file/{fid}?name={fname}" download="{fname}" style="padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">⬇️ Скачать</a>'+ f'<a href="/file/delete/{f["id"]}?task_id={task_id}&back={back}" onclick="return confirm(\"Удалить файл {fname}?\")" style="padding:7px 12px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">🗑 Удалить</a>'+ f'</div>' +
             f'</div>'
         )
     if not files_html:
@@ -1186,7 +1186,15 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgro
     </div>
     {files_html}
   </div>
-  <div class="note">💡 Прикрепить файл: напишите боту <strong>/attach {task_id}</strong> в Telegram</div>
+  <div class="card" style="margin-top:0;">
+    <div style="font-weight:600;font-size:14px;color:#0f172a;margin-bottom:14px;">📎 Прикрепить новый файл</div>
+    <form method="post" action="/file/upload/{task_id}?back={back}" enctype="multipart/form-data" style="display:flex;flex-direction:column;gap:10px;">
+      <input type="text" name="author" placeholder="Ваше имя" required style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+      <input type="file" name="file" required style="padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;">
+      <button type="submit" style="padding:10px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">⬆️ Загрузить файл</button>
+    </form>
+  </div>
+  <div class="note">💡 Также можно прикрепить файл через Telegram: <strong>/attach {task_id}</strong></div>
   <a href="{back}" class="btn-back">← К задачам</a>
 </div>
 </body>
@@ -1700,3 +1708,71 @@ select option{{background:#1e293b;}}
 </body>
 </html>"""
     return web.Response(text=html, content_type="text/html")
+
+# ─── Удаление файла ─────────────────────────────────────────────────────────
+@routes.get("/file/delete/{comment_id}")
+async def delete_file_route(request):
+    comment_id = int(request.match_info["comment_id"])
+    task_id = request.rel_url.query.get("task_id", "")
+    back = request.rel_url.query.get("back", "/")
+    delete_task_comment(comment_id)
+    raise web.HTTPFound(f"/attach/{task_id}?back={back}" if task_id else back)
+
+
+# ─── Загрузка файла через дашборд ───────────────────────────────────────────
+@routes.post("/file/upload/{task_id}")
+async def upload_file_route(request):
+    task_id = int(request.match_info["task_id"])
+    back = request.rel_url.query.get("back", "/")
+    try:
+        reader = await request.multipart()
+        author = "Дашборд"
+        file_data = None
+        file_name = "файл"
+
+        async for field in reader:
+            if field.name == "author":
+                author = (await field.read(decode=True)).decode("utf-8", errors="ignore").strip() or "Дашборд"
+            elif field.name == "file":
+                file_name = field.filename or "файл"
+                file_data = await field.read()
+
+        if not file_data:
+            raise web.HTTPFound(f"/attach/{task_id}?back={back}")
+
+        # Загружаем файл в Telegram через sendDocument
+        from aiohttp import ClientSession, FormData
+        async with ClientSession() as session:
+            form = FormData()
+            form.add_field("chat_id", BOT_TOKEN.split(":")[0])  # owner chat — fallback
+            # Используем sendDocument к боту чтобы получить file_id
+            # Отправим файл себе через бота
+            from config import NOTIFY_CHAT_ID
+            if not NOTIFY_CHAT_ID:
+                raise ValueError("NOTIFY_CHAT_ID не настроен")
+            form2 = FormData()
+            form2.add_field("chat_id", NOTIFY_CHAT_ID)
+            form2.add_field("caption", f"📎 Файл к задаче #{task_id} от {author}")
+            import io
+            form2.add_field("document", io.BytesIO(file_data), filename=file_name)
+            async with session.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
+                data=form2
+            ) as resp:
+                result = await resp.json()
+                if result.get("ok"):
+                    doc = result["result"].get("document", {})
+                    file_id = doc.get("file_id", "")
+                    add_task_comment(
+                        task_id=task_id,
+                        author=author,
+                        text="",
+                        file_id=file_id,
+                        file_name=file_name,
+                        file_type="document"
+                    )
+                else:
+                    raise ValueError(result.get("description", "Ошибка загрузки"))
+    except Exception as e:
+        pass  # Тихо игнорируем ошибку и возвращаем на страницу
+    raise web.HTTPFound(f"/attach/{task_id}?back={back}")
