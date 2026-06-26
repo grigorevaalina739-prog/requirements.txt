@@ -1256,10 +1256,9 @@ async def agent_parse(request):
         if not result:
             return web.json_response({"error": "Не удалось распознать задачу"})
         # Если нет проекта — подставляем первый доступный
-        if not result.get("project"):
-            projects = get_projects()
-            if projects:
-                result["project"] = projects[0]["name"]
+        # Если проект не определён — не подставляем дефолт, пусть пользователь выберет
+        # Но передаём список проектов для подсказки
+        result["_projects"] = [p["name"] for p in get_projects()]
         return web.json_response(result)
     except Exception as e:
         return web.json_response({"error": str(e)})
