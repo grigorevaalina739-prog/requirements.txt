@@ -321,7 +321,13 @@ async def cmd_start(message: Message):
         return False
 
     my_tasks = [t for t in all_tasks if name_matches(tg_name, t.get("assignee"))]
-    active = [t for t in my_tasks if t.get("status") not in ("Выполнена",)]
+    active_all = [t for t in my_tasks if t.get("status") not in ("Выполнена",)]
+    seen_titles = set()
+    active = []
+    for t in active_all:
+        if t['title'] not in seen_titles:
+            seen_titles.add(t['title'])
+            active.append(t)
     if active:
         today = datetime.now().strftime("%Y-%m-%d")
         lines = [f"📋 *Ваши активные задачи ({len(active)}):*\n"]
