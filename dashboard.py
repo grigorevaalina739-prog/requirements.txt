@@ -789,15 +789,37 @@ async def view_file(request):
         ext = display_name.lower().rsplit(".", 1)[-1] if "." in display_name else ""
         if ext in ("xlsx","xls","docx","doc","pptx","ppt","zip","rar"):
             icon = "📊" if ext in ("xlsx","xls") else "📄" if ext in ("docx","doc") else "📋" if ext in ("pptx","ppt") else "📦"
+            # Формируем прямую ссылку для открытия через Google Sheets / Office Online
+            file_direct_url = request.url.scheme + "://" + request.url.host + f"/file/{file_id}?name={display_name}"
+            if ext in ("xlsx","xls","csv"):
+                online_url = f"https://docs.google.com/spreadsheets/d/viewer?url={file_direct_url}"
+                online_label = "📊 Открыть в Google Sheets"
+                online_color = "#16a34a"
+            elif ext in ("pptx","ppt"):
+                online_url = f"https://view.officeapps.live.com/op/view.aspx?src={file_direct_url}"
+                online_label = "📋 Открыть в PowerPoint Online"
+                online_color = "#d97706"
+            else:
+                online_url = f"https://docs.google.com/viewer?url={file_direct_url}"
+                online_label = "📄 Открыть в Google Docs"
+                online_color = "#1d4ed8"
             html = f"""<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>{display_name}</title>
 <style>body{{font-family:-apple-system,sans-serif;background:#0a0f1e;color:#f1f5f9;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;}}
-.card{{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:32px 40px;text-align:center;max-width:400px;}}
-.icon{{font-size:48px;margin-bottom:12px;}}.name{{font-size:15px;font-weight:600;color:white;margin-bottom:6px;word-break:break-all;}}
-.sub{{font-size:13px;color:#94a3b8;margin-bottom:20px;}}.btn{{padding:12px 24px;background:#3b82f6;color:white;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;}}
-.btn:hover{{background:#2563eb;}}</style></head><body>
-<div class="card"><div class="icon">{icon}</div><div class="name">{display_name}</div>
-<div class="sub">Этот формат нельзя открыть прямо в браузере</div>
-<a href="/file/{file_id}?name={display_name}" class="btn">⬇️ Скачать файл</a></div></body></html>"""
+.card{{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:32px 40px;text-align:center;max-width:460px;}}
+.icon{{font-size:48px;margin-bottom:12px;}}.name{{font-size:14px;font-weight:600;color:white;margin-bottom:6px;word-break:break-all;}}
+.sub{{font-size:12px;color:#94a3b8;margin-bottom:20px;}}
+.btns{{display:flex;flex-direction:column;gap:10px;}}
+.btn{{padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;transition:opacity .15s;}}
+.btn:hover{{opacity:.85;}}</style></head><body>
+<div class="card">
+  <div class="icon">{icon}</div>
+  <div class="name">{display_name}</div>
+  <div class="sub">Выберите способ открытия</div>
+  <div class="btns">
+    <a href="{online_url}" target="_blank" class="btn" style="background:{online_color};color:white;">{online_label}</a>
+    <a href="/file/{file_id}?name={display_name}" class="btn" style="background:rgba(255,255,255,.08);color:#e2e8f0;border:1px solid rgba(255,255,255,.12);">⬇️ Скачать файл</a>
+  </div>
+</div></body></html>"""
             return web.Response(text=html, content_type="text/html")
         return web.Response(
             body=body, content_type=content_type,
