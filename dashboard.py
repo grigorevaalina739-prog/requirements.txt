@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web, ClientSession
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task
 from datetime import datetime, date
 from config import BOT_TOKEN
 
@@ -108,6 +108,9 @@ def task_row(t, project_filter="", status_filter=""):
             f'<a href="#" title="Переоткрыть" '
             f'style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#F1F5F9;color:#64748B;text-decoration:none;font-size:14px;" '
             f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">↩️</a>"
+            f'<a href="/archive/task/{tid}?back={back_url}" title="В архив" '
+            f'style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:rgba(139,92,246,.15);color:#8b5cf6;text-decoration:none;font-size:14px;" '
+            f"onclick=\"return confirm('Архивировать задачу #{tid}?')\">📦</a>"
         )
     else:
         done_btn = (
@@ -498,6 +501,7 @@ async def dashboard(request):
         "</div></div>\n"
         "  <div class=\"topbar-right\">"
         "<a href=\"/calendar\" class=\"tb-btn tb-ghost\">📅 Календарь</a>"
+        "<a href=\"/archive\" class=\"tb-btn tb-ghost\">📦 Архив</a>"
         "<a href=\"/newtask\" class=\"tb-btn tb-blue\">+ Задача</a>"
         "<button class=\"tb-btn tb-ghost\" onclick=\"openCmd()\" title=\"Ctrl+K\">⌘K</button>"
         "</div>\n</div>\n"
@@ -1495,3 +1499,131 @@ async def calendar_edit_save(request):
 
 
 
+
+# ─── Архив задач ───────────────────────────────────────────────────────────
+@routes.get("/archive/task/{task_id}")
+async def do_archive_task(request):
+    task_id = int(request.match_info["task_id"])
+    archive_task(task_id)
+    back = request.rel_url.query.get("back", "/")
+    raise web.HTTPFound(back)
+
+
+@routes.get("/archive/restore/{task_id}")
+async def do_restore_task(request):
+    task_id = int(request.match_info["task_id"])
+    restore_task(task_id)
+    raise web.HTTPFound("/archive")
+
+
+@routes.get("/archive")
+async def archive_page(request):
+    selected_project = request.rel_url.query.get("project", "")
+    archived = get_archived_tasks(project=selected_project or None)
+    projects = get_projects()
+
+    # Группируем по проектам
+    by_project = {}
+    for t in archived:
+        proj = t.get("project") or "Без проекта"
+        by_project.setdefault(proj, []).append(t)
+
+    project_filter_opts = '<option value="">Все проекты</option>' + "".join(
+        f'<option value="{p["name"]}" {"selected" if p["name"]==selected_project else ""}>{p["name"]}</option>'
+        for p in projects
+    )
+
+    # Строим блоки по проектам
+    projects_html = ""
+    for proj_name, tasks in by_project.items():
+        rows = ""
+        for t in tasks:
+            cmts = get_task_comments(t["id"])
+            files = [c for c in cmts if c.get("file_id")]
+            files_html = ""
+            for f in files:
+                fname = f.get("file_name", "файл")
+                fid = f.get("file_id", "")
+                files_html += (
+                    f'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;">'
+                    f'<span style="font-size:12px;">📎</span>'
+                    f'<span style="font-size:12px;color:#cbd5e1;">{fname}</span>'
+                    f'<a href="/file/view/{fid}?name={fname}" target="_blank" style="font-size:11px;color:#3b82f6;text-decoration:none;">Открыть</a>'
+                    f'<a href="/file/{fid}?name={fname}" style="font-size:11px;color:#64748b;text-decoration:none;">Скачать</a>'
+                    f'</div>'
+                )
+            parts = (t.get("assignee") or "").split()
+            initials = (parts[0][0] if parts else "?") + (parts[1][0] if len(parts) > 1 else "")
+            av_colors = ["#3B82F6","#8B5CF6","#10B981","#F59E0B","#EF4444","#06B6D4"]
+            av_color = av_colors[sum(ord(c) for c in (t.get("assignee") or "a")) % len(av_colors)]
+
+            rows += f'''<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 20px;margin-bottom:10px;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            <span style="font-size:11px;color:#64748b;font-weight:700;">#{t["id"]}</span>
+                            <span style="background:#ECFDF5;color:#059669;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">✅ Выполнена</span>
+                        </div>
+                        <div style="font-size:14px;font-weight:500;color:#e2e8f0;margin-bottom:6px;">{t["title"]}</div>
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <div style="width:22px;height:22px;border-radius:50%;background:{av_color}20;color:{av_color};font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;">{initials}</div>
+                                <span style="font-size:12px;color:#94a3b8;">{t.get("assignee") or "—"}</span>
+                            </div>
+                            <span style="font-size:12px;color:#64748b;">📅 {t.get("deadline") or "—"}</span>
+                            {f'<span style="font-size:12px;color:#64748b;">💬 {t.get("comment","")[:60]}</span>' if t.get("comment") else ""}
+                        </div>
+                        {f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);">{files_html}</div>' if files_html else ""}
+                    </div>
+                    <a href="/archive/restore/{t["id"]}" style="padding:6px 14px;background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:12px;text-decoration:none;white-space:nowrap;transition:all .15s;" onmouseover="this.style.color=\'white\'" onmouseout="this.style.color=\'#94a3b8\'">↩️ Восстановить</a>
+                </div>
+            </div>'''
+
+        projects_html += f'''<div style="margin-bottom:28px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                <h2 style="font-size:16px;font-weight:700;color:white;">📁 {proj_name}</h2>
+                <span style="background:rgba(255,255,255,.08);color:#94a3b8;padding:3px 10px;border-radius:20px;font-size:12px;">{len(tasks)} задач</span>
+            </div>
+            {rows}
+        </div>'''
+
+    if not projects_html:
+        projects_html = '''<div style="text-align:center;padding:60px;color:#64748b;">
+            <div style="font-size:48px;margin-bottom:16px;">📦</div>
+            <p style="font-size:16px;">Архив пуст</p>
+            <p style="font-size:13px;margin-top:6px;">Выполненные задачи можно архивировать кнопкой 📦</p>
+        </div>'''
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Архив задач</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0f1e;color:#f1f5f9;min-height:100vh;}}
+.topbar{{background:rgba(10,15,30,.96);border-bottom:1px solid rgba(255,255,255,.08);padding:0 32px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50;}}
+.topbar a.back{{color:rgba(255,255,255,.6);text-decoration:none;font-size:13px;}}
+.topbar h1{{font-size:16px;font-weight:700;color:white;flex:1;}}
+select{{padding:7px 12px;border:1px solid rgba(255,255,255,.1);border-radius:20px;font-size:12px;background:rgba(255,255,255,.06);color:white;cursor:pointer;outline:none;}}
+select option{{background:#1e293b;}}
+.main{{padding:28px 32px;max-width:900px;}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/" class="back">← Дашборд</a>
+  <h1>📦 Архив задач</h1>
+  <form method="get">
+    <select name="project" onchange="this.form.submit()">
+      {project_filter_opts}
+    </select>
+  </form>
+</div>
+<div class="main">
+  {projects_html}
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
