@@ -286,6 +286,7 @@ async def _show_main_menu(message, name: str):
          InlineKeyboardButton(text="📊 Дашборд", callback_data="menu_dashboard")],
         [InlineKeyboardButton(text="✅ Выполненные", callback_data="menu_done"),
          InlineKeyboardButton(text="⚠️ Просроченные", callback_data="menu_overdue")],
+        [InlineKeyboardButton(text="📎 Прикрепить файл", callback_data="menu_attach")],
         [InlineKeyboardButton(text="📁 Проекты", callback_data="menu_projects"),
          InlineKeyboardButton(text="🆕 Новый проект", callback_data="menu_newproject")],
     ])
