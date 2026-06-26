@@ -348,3 +348,10 @@ def restore_task(task_id: int):
     with get_conn() as conn:
         conn.execute("UPDATE tasks SET status='Выполнена' WHERE id=?", (task_id,))
     return True
+
+
+def delete_task_comment(comment_id: int):
+    """Удаляет комментарий/файл по ID."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM task_comments WHERE id=?", (comment_id,))
+    return True
