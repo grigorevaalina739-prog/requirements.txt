@@ -316,3 +316,30 @@ def update_meeting(meeting_id, title, project, date, time_start, time_end, parti
     return True
 
 
+
+
+def archive_task(task_id: int):
+    """Перемещает задачу в архив."""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET status='Архив' WHERE id=?", (task_id,))
+    return True
+
+def get_archived_tasks(project=None):
+    """Возвращает архивные задачи."""
+    with get_conn() as conn:
+        if project:
+            rows = conn.execute(
+                "SELECT * FROM tasks WHERE status='Архив' AND project=? ORDER BY id DESC",
+                (project,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM tasks WHERE status='Архив' ORDER BY project, id DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+def restore_task(task_id: int):
+    """Восстанавливает задачу из архива."""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET status='Выполнена' WHERE id=?", (task_id,))
+    return True
