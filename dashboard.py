@@ -132,15 +132,13 @@ def task_row(t, project_filter="", status_filter=""):
         '</div></div></div>'
     )
 
-    title_short = t['title'][:90] + '…' if len(t['title']) > 90 else t['title']
-
     return (
-        f'<tr class="task-row" style="{row_border}background:white;" '
-        f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#F8FAFC\';" '
-        f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
-        f'<td style="padding:14px 12px;color:#94A3B8;font-size:12px;font-weight:600;white-space:nowrap;">#{tid}</td>'
-        f'<td style="padding:14px 12px;min-width:220px;max-width:320px;">'
-        f'<div style="font-weight:500;font-size:14px;color:#0f172a;line-height:1.4;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;" title="{t["title"]}">{title_short}</div>'
+        f'<tr class="task-row" style="{row_border}background:#0d1424;" '
+        f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#111b2e\';" '
+        f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'#0d1424\';">'
+        f'<td style="padding:14px 12px;color:#64748b;font-size:12px;font-weight:700;white-space:nowrap;">#{tid}</td>'
+        f'<td style="padding:14px 16px;min-width:240px;">'
+        f'<div style="font-weight:500;font-size:14px;color:#f1f5f9;line-height:1.5;">{t["title"]}</div>'
         f'</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
