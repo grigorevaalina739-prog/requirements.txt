@@ -384,7 +384,7 @@ async def dashboard(request):
         ":root{--bg:#f4f6fb;--surface:#ffffff;--surface2:#f8faff;--accent:#4f7ef7;--accent2:#6366f1;--red:#e05c5c;--emerald:#16a37a;--amber:#d97706;--purple:#7c3aed;--muted:#64748b;--text:#0f172a;--text2:#475569;--border:#e2e8f0;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);}\n"
         "*{box-sizing:border-box;margin:0;padding:0;}\n"
         "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}\n"
-        ".topbar{background:rgba(15,22,41,.96);backdrop-filter:blur(20px);border-bottom:1px solid rgba(148,163,184,.1);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}\n"
+        ".topbar{background:linear-gradient(135deg,rgba(180,20,40,.92) 0%,rgba(150,15,35,.95) 100%);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.1);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}\n"
         ".topbar-brand{display:flex;align-items:center;gap:12px;}\n"
         ".logo{width:32px;height:32px;background:linear-gradient(135deg,#4f8ef7,#8b78f0);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}\n"
         ".topbar-brand h1{font-size:14px;font-weight:700;letter-spacing:.5px;color:var(--text);}\n"
