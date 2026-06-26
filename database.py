@@ -46,6 +46,13 @@ def fix_board_miniso_tasks():
         conn.execute(
             "UPDATE tasks SET deadline='2026-06-30' WHERE project='Board Miniso' AND (deadline IS NULL OR deadline='' OR deadline='None')"
         )
+        # Принудительное удаление дублей через SQL
+        conn.execute("""
+            DELETE FROM tasks WHERE id NOT IN (
+                SELECT MIN(id) FROM tasks
+                GROUP BY LOWER(TRIM(title)), LOWER(TRIM(COALESCE(assignee,''))), LOWER(TRIM(COALESCE(project,'')))
+            )
+        """)
 
 def migrate_bord_to_miniso():
     """Переносит задачи из Борд 16.06.2026 в Board Miniso и удаляет старый проект."""
