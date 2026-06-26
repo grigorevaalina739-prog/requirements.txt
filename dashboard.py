@@ -943,7 +943,6 @@ async def admin_dedup2(request):
     from database import get_conn
     with get_conn() as conn:
         before = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
-        # Delete by same title only (ignore assignee)
         conn.execute("""
             DELETE FROM tasks WHERE id NOT IN (
                 SELECT MIN(id) FROM tasks
@@ -953,6 +952,18 @@ async def admin_dedup2(request):
         after = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
     deleted = before - after
     return web.Response(text=f"✅ Удалено дублей: {deleted}. Было: {before}, стало: {after}", content_type="text/plain")
+
+
+@routes.get("/admin/merge")
+async def admin_merge(request):
+    from database import get_conn, merge_task_assignees
+    merge_task_assignees()
+    with get_conn() as conn:
+        tasks = conn.execute("SELECT id, title, assignee, project FROM tasks WHERE assignee LIKE '%,%' ORDER BY id").fetchall()
+    lines = ["✅ Объединение выполнено! Задачи с несколькими ответственными:"]
+    for t in tasks:
+        lines.append(f"#{t[0]} | {t[2]} | {t[1][:50]}")
+    return web.Response(text="\n".join(lines), content_type="text/plain")
 
 
 def create_app():
