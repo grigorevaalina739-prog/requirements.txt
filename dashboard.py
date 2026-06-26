@@ -392,7 +392,7 @@ async def dashboard(request):
         "<style>\n"
         ":root{--bg:#f4f6fb;--surface:#ffffff;--surface2:#f8faff;--accent:#4f7ef7;--accent2:#6366f1;--red:#e05c5c;--emerald:#16a37a;--amber:#d97706;--purple:#7c3aed;--muted:#64748b;--text:#0f172a;--text2:#475569;--border:#e2e8f0;--shadow:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);}\n"
         "*{box-sizing:border-box;margin:0;padding:0;}\n"
-        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}\n"
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;background:linear-gradient(160deg,#ffb3b3 0%,#ff6b6b 45%,#e83232 100%);color:#3a0505;min-height:100vh;}\n"
         ".topbar{background:linear-gradient(135deg,rgba(220,60,60,.88) 0%,rgba(200,45,45,.92) 100%);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.1);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}\n"
         ".topbar-brand{display:flex;align-items:center;gap:12px;}\n"
         ".logo{width:32px;height:32px;background:linear-gradient(135deg,#4f8ef7,#8b78f0);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}\n"
