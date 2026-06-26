@@ -181,6 +181,21 @@ def calc_stats(tasks):
     percent = round((done / total * 100) if total > 0 else 0)
     return {"total": total, "open": open_, "done": done, "overdue": overdue, "percent": percent}
 
+@routes.get("/debug-error")
+async def debug_error(request):
+    """Показывает реальную ошибку."""
+    import traceback
+    try:
+        # Simulate dashboard call
+        from database import get_tasks, get_projects, get_stats
+        tasks = get_tasks()
+        projects = get_projects()
+        stats = get_stats()
+        return web.Response(text=f"OK: {len(tasks)} tasks, {len(projects)} projects", content_type="text/plain")
+    except Exception as e:
+        return web.Response(text=f"ERROR: {e}\n\n{traceback.format_exc()}", content_type="text/plain")
+
+
 @routes.get("/")
 async def dashboard(request):
     projects = get_projects()
