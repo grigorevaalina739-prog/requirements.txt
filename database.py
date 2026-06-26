@@ -148,7 +148,7 @@ def add_task(project, assignee, department, title, deadline, comment="", status=
         return cur.lastrowid
 
 def get_tasks(project=None, status=None):
-    query = "SELECT * FROM tasks WHERE 1=1"
+    query = "SELECT * FROM tasks WHERE status != 'Архив'"
     params = []
     if project:
         query += " AND project = ?"
