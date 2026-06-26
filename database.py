@@ -53,13 +53,11 @@ def fix_board_miniso_tasks():
                 GROUP BY LOWER(TRIM(title)), LOWER(TRIM(COALESCE(assignee,''))), LOWER(TRIM(COALESCE(project,'')))
             )
         """)
-        # Добавляем комментарий к задаче #6 о объединённой задаче
-        existing = conn.execute("SELECT id FROM task_comments WHERE task_id=6 AND text LIKE '%прайс%'").fetchone()
-        if not existing:
-            conn.execute(
-                "INSERT INTO task_comments (task_id, author, text) VALUES (?,?,?)",
-                (6, "Система", "Также: Получить прайс на маленькие пакеты Минисо")
-            )
+        # Объединяем задачи #6 и #7 — обновляем название #6
+        conn.execute(
+            "UPDATE tasks SET title=? WHERE id=6",
+            ("Передать дизайн и плотность пакета Асель и Алексею; получить прайс на маленькие пакеты Минисо",)
+        )
 
 def migrate_bord_to_miniso():
     """Переносит задачи из Борд 16.06.2026 в Board Miniso и удаляет старый проект."""
