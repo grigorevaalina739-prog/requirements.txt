@@ -133,12 +133,12 @@ def task_row(t, project_filter="", status_filter=""):
     )
 
     return (
-        f'<tr class="task-row" style="{row_border}background:#0d1424;" '
-        f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#111b2e\';" '
-        f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'#0d1424\';">'
+        f'<tr class="task-row" style="{row_border}background:white;" '
+        f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#f0f7ff\';" '
+        f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
         f'<td style="padding:14px 12px;color:#64748b;font-size:12px;font-weight:700;white-space:nowrap;">#{tid}</td>'
         f'<td style="padding:14px 16px;min-width:240px;">'
-        f'<div style="font-weight:500;font-size:14px;color:#f1f5f9;line-height:1.5;">{t["title"]}</div>'
+        f'<div style="font-weight:500;font-size:14px;color:#0f172a;line-height:1.5;">{t["title"]}</div>'
         f'</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
@@ -451,9 +451,9 @@ async def dashboard(request):
         ".tbl-wrap{background:white;border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);}\n"
         ".tbl-wrap table{width:100%;border-collapse:collapse;}\n"
         ".tbl-wrap thead th{padding:10px 13px;font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;background:#f8fafc;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap;position:sticky;top:60px;z-index:10;}\n"
-        ".task-row{border-bottom:1px solid #f1f5f9;transition:background .1s;background:white !important;}\n"
-        ".task-row:hover{background:#f8faff !important;}\n"
-        ".task-row td{padding:13px;vertical-align:middle;color:#1e293b !important;}\n"
+        ".task-row{border-bottom:1px solid #f1f5f9;transition:all .15s;background:white;}\n"
+        ".task-row:hover{background:#f0f7ff;}\n"
+        ".task-row td{padding:14px 13px;vertical-align:top;color:#0f172a;}\n"
         ".act-btn{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:13px;text-decoration:none;border:none;cursor:pointer;transition:all .15s;background:#f1f5f9;}\n"
         ".row-acts{display:flex;gap:3px;opacity:0;transition:opacity .15s;}\n"
         ".task-row:hover .row-acts{opacity:1;}\n"
