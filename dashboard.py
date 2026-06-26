@@ -404,7 +404,7 @@ async def dashboard(request):
         ".tb-ghost:hover{color:#cc2222;background:white;border-color:white;}\n"
         ".tb-blue{color:white;background:var(--accent);}\n"
         ".tb-blue:hover{background:#2563eb;}\n"
-        ".hero{position:relative;overflow:hidden;padding:36px 32px;background:linear-gradient(135deg,rgba(200,45,45,.9) 0%,rgba(170,25,25,.92) 60%,rgba(150,15,15,.9) 100%);border-bottom:1px solid rgba(255,255,255,.15);}\n"
+        ".hero{position:relative;overflow:hidden;padding:36px 32px;background:linear-gradient(160deg,rgba(220,50,50,.85) 0%,rgba(180,20,20,.9) 100%);border-bottom:1px solid rgba(255,255,255,.15);}\n"
         ".hero::before{content:\'\';position:absolute;top:-80px;right:-40px;width:320px;height:320px;background:radial-gradient(circle,rgba(79,142,247,.08) 0%,transparent 70%);pointer-events:none;}\n"
         ".hero::after{content:\'\';position:absolute;bottom:-60px;left:35%;width:400px;height:260px;background:radial-gradient(circle,rgba(59,130,246,.07) 0%,transparent 70%);pointer-events:none;}\n"
         ".redline{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#4f8ef7 40%,#8b78f0 60%,transparent);}\n"
@@ -1750,7 +1750,7 @@ async def archive_page(request):
 <title>Архив задач</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0;}}
-body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(160deg,#fde8e8 0%,#fcd5d5 50%,#f8c8c8 100%);color:#3a0505;min-height:100vh;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(160deg,#ffb3b3 0%,#ff6b6b 45%,#e83232 100%);color:#3a0505;min-height:100vh;}}
 .topbar{{background:rgba(10,15,30,.96);border-bottom:1px solid rgba(255,255,255,.08);padding:0 32px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50;}}
 .topbar a.back{{color:rgba(255,255,255,.6);text-decoration:none;font-size:13px;}}
 .topbar h1{{font-size:16px;font-weight:700;color:white;flex:1;}}
