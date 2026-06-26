@@ -754,35 +754,74 @@ async def newtask_save(request):
 
 
 # ─── Скачивание файла из Telegram ─────────────────────────────────────────
-@routes.get("/file/{file_id}")
-async def download_file(request):
+async def _fetch_telegram_file(file_id):
+    from aiohttp import ClientSession
+    async with ClientSession() as session:
+        async with session.get(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+            params={"file_id": file_id}
+        ) as resp:
+            data = await resp.json()
+            if not data.get("ok"):
+                return None, None, None
+            file_path = data["result"]["file_path"]
+        file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+        async with session.get(file_url) as file_resp:
+            if file_resp.status != 200:
+                return None, None, None
+            content_type = file_resp.headers.get("Content-Type", "application/octet-stream")
+            file_name = file_path.split("/")[-1]
+            body = await file_resp.read()
+            return body, content_type, file_name
+
+
+@routes.get("/file/view/{file_id}")
+async def view_file(request):
     file_id = request.match_info["file_id"]
+    fname_hint = request.rel_url.query.get("name", "")
     if not BOT_TOKEN:
         return web.Response(text="Токен бота не настроен", status=500)
     try:
-        async with ClientSession() as session:
-            # Получаем путь к файлу через Bot API
-            async with session.get(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
-                params={"file_id": file_id}
-            ) as resp:
-                data = await resp.json()
-                if not data.get("ok"):
-                    return web.Response(text="Файл не найден", status=404)
-                file_path = data["result"]["file_path"]
-            # Скачиваем файл
-            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
-            async with session.get(file_url) as file_resp:
-                if file_resp.status != 200:
-                    return web.Response(text="Ошибка загрузки файла", status=502)
-                content_type = file_resp.headers.get("Content-Type", "application/octet-stream")
-                file_name = file_path.split("/")[-1]
-                body = await file_resp.read()
-                return web.Response(
-                    body=body,
-                    content_type=content_type,
-                    headers={"Content-Disposition": f'attachment; filename="{file_name}"'}
-                )
+        body, content_type, file_name = await _fetch_telegram_file(file_id)
+        if body is None:
+            return web.Response(text="Файл не найден", status=404)
+        display_name = fname_hint or file_name
+        ext = display_name.lower().rsplit(".", 1)[-1] if "." in display_name else ""
+        if ext in ("xlsx","xls","docx","doc","pptx","ppt","zip","rar"):
+            icon = "📊" if ext in ("xlsx","xls") else "📄" if ext in ("docx","doc") else "📋" if ext in ("pptx","ppt") else "📦"
+            html = f"""<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>{display_name}</title>
+<style>body{{font-family:-apple-system,sans-serif;background:#0a0f1e;color:#f1f5f9;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;}}
+.card{{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:32px 40px;text-align:center;max-width:400px;}}
+.icon{{font-size:48px;margin-bottom:12px;}}.name{{font-size:15px;font-weight:600;color:white;margin-bottom:6px;word-break:break-all;}}
+.sub{{font-size:13px;color:#94a3b8;margin-bottom:20px;}}.btn{{padding:12px 24px;background:#3b82f6;color:white;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block;}}
+.btn:hover{{background:#2563eb;}}</style></head><body>
+<div class="card"><div class="icon">{icon}</div><div class="name">{display_name}</div>
+<div class="sub">Этот формат нельзя открыть прямо в браузере</div>
+<a href="/file/{file_id}?name={display_name}" class="btn">⬇️ Скачать файл</a></div></body></html>"""
+            return web.Response(text=html, content_type="text/html")
+        return web.Response(
+            body=body, content_type=content_type,
+            headers={"Content-Disposition": f'inline; filename="{display_name}"'}
+        )
+    except Exception as e:
+        return web.Response(text=f"Ошибка: {e}", status=500)
+
+
+@routes.get("/file/{file_id}")
+async def download_file(request):
+    file_id = request.match_info["file_id"]
+    fname_hint = request.rel_url.query.get("name", "")
+    if not BOT_TOKEN:
+        return web.Response(text="Токен бота не настроен", status=500)
+    try:
+        body, content_type, file_name = await _fetch_telegram_file(file_id)
+        if body is None:
+            return web.Response(text="Файл не найден", status=404)
+        display_name = fname_hint or file_name
+        return web.Response(
+            body=body, content_type=content_type,
+            headers={"Content-Disposition": f'attachment; filename="{display_name}"'}
+        )
     except Exception as e:
         return web.Response(text=f"Ошибка: {e}", status=500)
 
@@ -1010,7 +1049,7 @@ async def attach_task_page(request):
             f'<div style="font-size:12px;color:#64748b;margin-top:2px;">👤 {f["author"]} · 🕐 {dt}</div>' +
             comment_bit +
             f'</div>' +
-            f'<div style="display:flex;gap:6px;flex-shrink:0;">' +f'<a href="{dl}" target="_blank" style="padding:7px 12px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">👁️ Открыть</a>' +f'<a href="{dl}" download="{fname}" style="padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">⬇️ Скачать</a>' +f'</div>' +
+            f'<div style="display:flex;gap:6px;flex-shrink:0;">' +f'<a href="/file/view/{fid}?name={fname}" target="_blank" style="padding:7px 12px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">👁️ Открыть</a>' +f'<a href="/file/{fid}?name={fname}" download="{fname}" style="padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">⬇️ Скачать</a>' +f'</div>' +
             f'</div>'
         )
     if not files_html:
