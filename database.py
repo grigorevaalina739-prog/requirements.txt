@@ -121,6 +121,12 @@ def init_db():
         );
         """)
     logger.info("База данных инициализирована.")
+    # Разовые операции при первом запуске
+    cleanup_users()
+    migrate_bord_to_miniso()
+    seed_bord_16_06()
+    fix_board_miniso_tasks()
+
 
 def get_projects():
     with get_conn() as conn:
@@ -135,11 +141,7 @@ def add_project(name):
         logger.error(f"Ошибка добавления проекта: {e}")
         return False
 
-# Запускаем очистку при старте
-cleanup_users()
-migrate_bord_to_miniso()
-seed_bord_16_06()
-fix_board_miniso_tasks()
+# Эти функции вызываются из init_db() при старте приложения
 
 def add_task(project, assignee, department, title, deadline, comment="", status="Открыта"):
     with get_conn() as conn:
