@@ -61,7 +61,7 @@ def dedup_tasks():
         seen = set()
         to_delete = []
         for row in rows:
-            key = (row["title"].strip().lower(), (row["assignee"] or "").strip().lower())
+            key = (row["title"].strip().lower(), (row["assignee"] or "").strip().lower(), (row["project"] or "").strip().lower())
             if key in seen:
                 to_delete.append(row["id"])
             else:
