@@ -172,14 +172,23 @@ def format_one_of_multiple(task, idx, total):
 
 
 def format_task_text(parsed):
-    deadline = parsed.get('deadline') or '—'
-    return (
-        f"📌 *Название*\n{parsed.get('title') or '—'}\n\n"
-        f"👤 *Ответственный*\n{parsed.get('assignee') or '—'}\n\n"
-        f"📅 *Срок*\n{deadline}\n\n"
-        f"📁 *Проект*\n{parsed.get('project') or '—'}\n\n"
-        f"Всё верно?"
-    )
+    deadline = parsed.get("deadline") or "—"
+    assignee = parsed.get("assignee") or "—"
+    project = parsed.get("project") or "—"
+    desc = parsed.get("description") or ""
+    lines = [
+        f"📋 *Задача распознана:*\n",
+        f"📌 *{parsed.get('title') or '—'}*",
+    ]
+    if desc and desc != parsed.get("title"):
+        lines.append(f"\n_{desc[:150]}_")
+    lines += [
+        f"\n👤 Ответственный: {assignee}",
+        f"📅 Срок: {deadline}",
+        f"📁 Проект: {project}",
+        f"\n✅ *Всё верно?*"
+    ]
+    return "\n".join(lines)
 
 
 def format_existing_task(t):
@@ -1251,15 +1260,17 @@ async def universal_task_creator(message: Message, state: FSMContext):
         register_user(message.from_user.id, tg_name)
 
     # Парсим задачу через AI
-    thinking_msg = await message.answer("🤖 Создаю задачу...")
+    thinking_msg = await message.answer("🤖 Распознаю задачу...")
     today = datetime.now().strftime("%Y-%m-%d")
     result = await parse_task_with_ai(message.text, today)
 
     if not result:
         await thinking_msg.delete()
         await message.answer(
-            "❌ Не понял — попробуйте описать задачу подробнее.\n"
-            "Например: _Маркелова И. — подготовить отчёт по складу до 30 июня_",
+            "❌ Не удалось распознать задачу.\n\n"
+            "Попробуйте написать по-другому, например:\n"
+            "_Маркелова — подготовить отчёт по складу до 30 июня_\n"
+            "_Кострыкину исправить баг на сайте срочно_",
             parse_mode="Markdown"
         )
         return
