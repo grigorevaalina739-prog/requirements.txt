@@ -58,6 +58,9 @@ def fix_board_miniso_tasks():
             "UPDATE tasks SET title=? WHERE id=6",
             ("Передать дизайн и плотность пакета Асель и Алексею; получить прайс на маленькие пакеты Минисо",)
         )
+        # Удаляем лишний комментарий из задачи #6
+        conn.execute("DELETE FROM task_comments WHERE task_id=6 AND text LIKE '%прайс%'")
+        conn.execute("DELETE FROM task_comments WHERE task_id=6 AND author='Система'")
 
 def migrate_bord_to_miniso():
     """Переносит задачи из Борд 16.06.2026 в Board Miniso и удаляет старый проект."""
