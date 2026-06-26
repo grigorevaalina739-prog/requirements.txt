@@ -1,9 +1,10 @@
 """
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
-from aiohttp import web
+from aiohttp import web, ClientSession
 from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task
 from datetime import datetime, date
+from config import BOT_TOKEN
 
 routes = web.RouteTableDef()
 
@@ -750,6 +751,41 @@ async def newtask_save(request):
     raise web.HTTPFound("/")
 
 
+
+
+# ─── Скачивание файла из Telegram ─────────────────────────────────────────
+@routes.get("/file/{file_id}")
+async def download_file(request):
+    file_id = request.match_info["file_id"]
+    if not BOT_TOKEN:
+        return web.Response(text="Токен бота не настроен", status=500)
+    try:
+        async with ClientSession() as session:
+            # Получаем путь к файлу через Bot API
+            async with session.get(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getFile",
+                params={"file_id": file_id}
+            ) as resp:
+                data = await resp.json()
+                if not data.get("ok"):
+                    return web.Response(text="Файл не найден", status=404)
+                file_path = data["result"]["file_path"]
+            # Скачиваем файл
+            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}"
+            async with session.get(file_url) as file_resp:
+                if file_resp.status != 200:
+                    return web.Response(text="Ошибка загрузки файла", status=502)
+                content_type = file_resp.headers.get("Content-Type", "application/octet-stream")
+                file_name = file_path.split("/")[-1]
+                body = await file_resp.read()
+                return web.Response(
+                    body=body,
+                    content_type=content_type,
+                    headers={"Content-Disposition": f'attachment; filename="{file_name}"'}
+                )
+    except Exception as e:
+        return web.Response(text=f"Ошибка: {e}", status=500)
+
 def create_app():
     app = web.Application()
     app.add_routes(routes)
@@ -960,15 +996,22 @@ async def attach_task_page(request):
     files_html = ""
     for f in files:
         dt = (f.get("created_at") or "")[:16].replace("T", " ")
-        icon = "🖼️" if f.get("file_type") == "photo" else ("🎬" if f.get("file_type") == "video" else "📄")
+        ftype = f.get("file_type", "")
+        icon = "🖼️" if ftype == "photo" else ("🎬" if ftype == "video" else "📄")
+        fname = f.get("file_name") or "файл"
+        fid = f.get("file_id", "")
+        dl = f"/file/{fid}" if fid else "#"
+        comment_bit = f'<div style="font-size:12px;color:#475569;margin-top:2px;">💬 {f["text"]}</div>' if f.get("text") else ""
         files_html += (
-            f'<div style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid #f1f5f9;">'
-            f'<div style="width:40px;height:40px;background:#eff6ff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">{icon}</div>'
-            f'<div style="flex:1;">'
-            f'<div style="font-weight:600;font-size:14px;color:#0f172a;">{f.get("file_name","файл")}</div>'
-            f'<div style="font-size:12px;color:#64748b;margin-top:2px;">👤 {f["author"]} &nbsp;·&nbsp; 🕐 {dt}</div>'
-            + (f'<div style="font-size:12px;color:#475569;margin-top:2px;">💬 {f["text"]}</div>' if f.get("text") else "")
-            + f'</div></div>'
+            f'<div style="display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid #f1f5f9;">' +
+            f'<a href="{dl}" style="width:40px;height:40px;background:#eff6ff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;text-decoration:none;">{icon}</a>' +
+            f'<div style="flex:1;min-width:0;">' +
+            f'<a href="{dl}" style="font-weight:600;font-size:14px;color:#1d4ed8;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" download="{fname}">{fname}</a>' +
+            f'<div style="font-size:12px;color:#64748b;margin-top:2px;">👤 {f["author"]} · 🕐 {dt}</div>' +
+            comment_bit +
+            f'</div>' +
+            f'<a href="{dl}" download="{fname}" style="flex-shrink:0;padding:7px 12px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap;">⬇️ Скачать</a>' +
+            f'</div>'
         )
     if not files_html:
         files_html = '<div style="text-align:center;padding:40px 20px;"><div style="font-size:40px;margin-bottom:12px;">📭</div><p style="color:#94a3b8;font-size:14px;">Вложений пока нет</p></div>'
@@ -1387,6 +1430,7 @@ async def calendar_edit_save(request):
         description=data.get("description","")
     )
     raise web.HTTPFound(back)
+
 
 
 
