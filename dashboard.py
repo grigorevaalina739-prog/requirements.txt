@@ -924,6 +924,24 @@ async def download_file(request):
     except Exception as e:
         return web.Response(text=f"Ошибка: {e}", status=500)
 
+
+
+@routes.get("/admin/dedup")
+async def admin_dedup(request):
+    from database import get_conn
+    with get_conn() as conn:
+        before = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+        conn.execute("""
+            DELETE FROM tasks WHERE id NOT IN (
+                SELECT MIN(id) FROM tasks
+                GROUP BY LOWER(TRIM(title)), LOWER(TRIM(COALESCE(assignee,''))), LOWER(TRIM(COALESCE(project,'')))
+            ) AND status != 'Архив'
+        """)
+        after = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    deleted = before - after
+    return web.Response(text=f"✅ Удалено дублей: {deleted}. Было: {before}, стало: {after}", content_type="text/plain")
+
+
 def create_app():
     app = web.Application()
     app.add_routes(routes)
