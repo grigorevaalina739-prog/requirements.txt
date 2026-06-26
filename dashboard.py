@@ -395,7 +395,7 @@ async def dashboard(request):
         ".tb-ghost:hover{color:var(--text);background:var(--surface2);}\n"
         ".tb-blue{color:white;background:var(--accent);}\n"
         ".tb-blue:hover{background:#2563eb;}\n"
-        ".hero{position:relative;overflow:hidden;padding:36px 32px;background:linear-gradient(135deg,#0f1629 0%,#162448 60%,#0f1629 100%);border-bottom:1px solid var(--border);}\n"
+        ".hero{position:relative;overflow:hidden;padding:36px 32px;background:linear-gradient(135deg,rgba(200,45,45,.9) 0%,rgba(170,25,25,.92) 60%,rgba(150,15,15,.9) 100%);border-bottom:1px solid rgba(255,255,255,.15);}\n"
         ".hero::before{content:\'\';position:absolute;top:-80px;right:-40px;width:320px;height:320px;background:radial-gradient(circle,rgba(79,142,247,.08) 0%,transparent 70%);pointer-events:none;}\n"
         ".hero::after{content:\'\';position:absolute;bottom:-60px;left:35%;width:400px;height:260px;background:radial-gradient(circle,rgba(59,130,246,.07) 0%,transparent 70%);pointer-events:none;}\n"
         ".redline{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#4f8ef7 40%,#8b78f0 60%,transparent);}\n"
@@ -404,11 +404,11 @@ async def dashboard(request):
         ".hero-h2{font-size:26px;font-weight:800;letter-spacing:-1px;color:white;}\n"
         ".hero-sub{font-size:12px;color:rgba(255,220,220,.85);margin-top:8px;line-height:1.8;}\n"
         ".scores{display:flex;gap:10px;flex-wrap:wrap;}\n"
-        ".score{background:rgba(26,37,64,.9);border:1px solid rgba(148,163,184,.12);border-radius:14px;padding:12px 16px;text-align:center;min-width:80px;transition:transform .2s;}\n"
+        ".score{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.35);border-radius:14px;padding:12px 16px;text-align:center;min-width:80px;transition:transform .2s;}\n"
         ".score:hover{transform:translateY(-2px);}\n"
         ".score .val{font-size:20px;font-weight:800;color:white;}\n"
         ".score .lbl{font-size:10px;color:rgba(255,255,255,.7);margin-top:2px;letter-spacing:.4px;}\n"
-        ".ai-card{margin:20px 32px;background:rgba(79,142,247,.05);border:1px solid rgba(79,142,247,.15);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}\n"
+        ".ai-card{margin:20px 32px;background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.75);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}\n"
         ".ai-icon{width:38px;height:38px;background:linear-gradient(135deg,#4f8ef7,#8b78f0);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}\n"
         ".ai-text{flex:1;font-size:13px;color:#374151;line-height:1.5;}\n"
         ".ai-text strong{color:#1e3a8a;}\n"
@@ -419,14 +419,14 @@ async def dashboard(request):
         ".content{padding:22px 32px;}\n"
         ".sidebar{padding:22px 16px 22px 0;border-left:1px solid rgba(200,100,100,.2);}\n"
         ".kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;}\n"
-        ".kpi{background:rgba(26,37,64,.8);border:1px solid rgba(148,163,184,.1);border-radius:14px;padding:16px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s;cursor:default;}\n"
+        ".kpi{background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.7);border-radius:14px;padding:16px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s;cursor:default;}\n"
         ".kpi:hover{transform:translateY(-3px);border-color:#93c5fd;box-shadow:0 8px 24px rgba(79,126,247,.12);}\n"
         ".kpi-top{position:absolute;top:0;left:0;right:0;height:2px;}\n"
         ".kpi-icon{font-size:18px;margin-bottom:8px;}\n"
         ".kpi-num{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1;}\n"
         ".kpi-label{font-size:11px;color:#64748b;margin-top:3px;font-weight:500;}\n"
         ".kpi-sub{font-size:10px;color:#94a3b8;margin-top:6px;padding-top:6px;border-top:1px solid #f1f5f9;opacity:.9;}\n"
-        ".prog-card{background:white;border:1px solid var(--border);box-shadow:var(--shadow);border-radius:14px;padding:18px 20px;margin-bottom:18px;}\n"
+        ".prog-card{background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.75);border-radius:14px;padding:18px 20px;margin-bottom:18px;backdrop-filter:blur(8px);}\n"
         ".prog-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;}\n"
         ".prog-title{font-size:13px;font-weight:600;color:var(--text);}\n"
         ".prog-insight{font-size:11px;color:var(--muted);margin-top:3px;}\n"
@@ -449,7 +449,7 @@ async def dashboard(request):
         ".att-info{border-left:3px solid #4f8ef7;padding-left:9px;margin-left:-9px;background:#f0f6ff;border-radius:0 4px 4px 0;}\n"
         ".att-empty{text-align:center;padding:18px;color:#94a3b8;font-size:13px;}\n"
         ".att-empty p{margin-top:6px;}\n"
-        ".ctrl-bar{background:white;border:1px solid var(--border);box-shadow:var(--shadow);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}\n"
+        ".ctrl-bar{background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.75);border-radius:12px;padding:10px 14px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;backdrop-filter:blur(8px);}\n"
         ".pill{padding:5px 13px;border-radius:20px;font-size:12px;font-weight:500;text-decoration:none;border:1px solid var(--border);color:var(--muted);background:var(--surface2);transition:all .15s;white-space:nowrap;}\n"
         ".pill:hover{color:var(--text);border-color:#93c5fd;background:#eff6ff;}\n"
         ".pill-active{background:#1d4ed8!important;color:white!important;border-color:#1d4ed8!important;}\n"
@@ -1729,7 +1729,7 @@ async def archive_page(request):
 <title>Архив задач</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0;}}
-body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0f1e;color:#f1f5f9;min-height:100vh;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:linear-gradient(160deg,#fde8e8 0%,#fcd5d5 50%,#f8c8c8 100%);color:#3a0505;min-height:100vh;}}
 .topbar{{background:rgba(10,15,30,.96);border-bottom:1px solid rgba(255,255,255,.08);padding:0 32px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50;}}
 .topbar a.back{{color:rgba(255,255,255,.6);text-decoration:none;font-size:13px;}}
 .topbar h1{{font-size:16px;font-weight:700;color:white;flex:1;}}
