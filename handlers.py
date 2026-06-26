@@ -261,86 +261,79 @@ async def show_multiple_preview(target, state, edit=False):
 
 # ─── /start ────────────────────────────────────────────────────────────────
 @router.message(CommandStart())
-async def cmd_start(message: Message):
-    # Авторегистрация по имени из Telegram
-    tg_name = " ".join(filter(None, [message.from_user.first_name, message.from_user.last_name]))
-    if not tg_name:
-        tg_name = message.from_user.username or f"user_{message.from_user.id}"
-    register_user(message.from_user.id, tg_name)
+async def cmd_start(message: Message, state: FSMContext):
+    with get_conn() as conn:
+        existing = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
+
+    if existing:
+        await _show_main_menu(message, existing["name"])
+        await _send_my_tasks(message, existing["name"])
+    else:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=name, callback_data=f"reg_{i}")]
+            for i, name in enumerate(MANAGERS)
+        ] + [[InlineKeyboardButton(text="✏️ Ввести своё имя", callback_data="reg_manual")]])
+        await message.answer(
+            "👋 Добро пожаловать!\n\nВыберите своё имя из списка чтобы зарегистрироваться:",
+            reply_markup=keyboard
+        )
+
+
+async def _show_main_menu(message, name: str):
     menu = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Новая задача", callback_data="menu_newtask")],
         [InlineKeyboardButton(text="📋 Мои задачи", callback_data="menu_mytasks"),
          InlineKeyboardButton(text="📊 Дашборд", callback_data="menu_dashboard")],
         [InlineKeyboardButton(text="✅ Выполненные", callback_data="menu_done"),
          InlineKeyboardButton(text="⚠️ Просроченные", callback_data="menu_overdue")],
-        [InlineKeyboardButton(text="📎 Прикрепить файл", callback_data="menu_attach")],
         [InlineKeyboardButton(text="📁 Проекты", callback_data="menu_projects"),
          InlineKeyboardButton(text="🆕 Новый проект", callback_data="menu_newproject")],
     ])
     await message.answer(
-        f"👋 Добро пожаловать, *{tg_name}*!\n\nЧто хотите сделать?",
+        f"👋 Добро пожаловать, *{name}*!\n\nЧто хотите сделать?",
         reply_markup=menu,
         parse_mode="Markdown"
     )
 
-    # Сразу отправляем активные задачи если есть
+
+async def _send_my_tasks(message, name: str):
     all_tasks = get_tasks()
-
-    # Матчинг: ищем задачи где assignee совпадает с именем, фамилией или частью имени
-    # Также проверяем через MANAGERS — находим запись в списке по совпадению с tg_name
-    def name_matches(tg, assignee):
-        tg_l = tg.lower().strip()
-        as_l = (assignee or "").lower().strip()
-        if not as_l or not tg_l:
-            return False
-        # 1. Прямое совпадение
-        if tg_l in as_l or as_l in tg_l:
-            return True
-        # 2. Фамилия из assignee (первое слово) содержится в tg_name
-        as_surname = as_l.split()[0]
-        tg_words = tg_l.split()
-        if len(as_surname) >= 4:
-            for word in tg_words:
-                if as_surname in word or word in as_surname:
-                    return True
-        # 3. Любое слово из tg_name (>=4 букв) совпадает со словом из assignee
-        as_words = as_l.split()
-        for tg_word in tg_words:
-            if len(tg_word) < 4:
-                continue
-            for as_word in as_words:
-                if tg_word in as_word or as_word in tg_word:
-                    return True
-        # 4. Проверяем через MANAGERS
-        for mgr in MANAGERS:
-            mgr_l = mgr.lower()
-            mgr_surname = mgr_l.split()[0]
-            if len(mgr_surname) >= 4 and (mgr_surname in tg_l or any(mgr_surname in w for w in tg_words)):
-                if mgr_surname in as_l:
-                    return True
-        return False
-
-    my_tasks = [t for t in all_tasks if name_matches(tg_name, t.get("assignee"))]
-    active_all = [t for t in my_tasks if t.get("status") not in ("Выполнена",)]
-    seen_titles = set()
-    active = []
-    for t in active_all:
-        if t['title'] not in seen_titles:
-            seen_titles.add(t['title'])
+    surname = name.split()[0].lower()
+    seen, active = set(), []
+    for t in all_tasks:
+        assignee_l = (t.get("assignee") or "").lower()
+        if surname in assignee_l and t.get("status") not in ("Выполнена",) and t["title"] not in seen:
+            seen.add(t["title"])
             active.append(t)
-    if active:
-        today = datetime.now().strftime("%Y-%m-%d")
-        lines = [f"📋 *Ваши активные задачи ({len(active)}):*\n"]
-        for t in active:
-            deadline = t.get("deadline") or "—"
-            overdue = " 🔴 *ПРОСРОЧЕНА*" if deadline != "—" and deadline < today else ""
-            lines.append(
-                f"• *#{t['id']}* {t['title'][:50]}{overdue}\n"
-                f"  📅 {deadline} | 📁 {t.get('project') or '—'}\n"
-                f"  /done {t['id']} — отметить выполненной"
-            )
-        await message.answer("\n".join(lines), parse_mode="Markdown")
+    if not active:
+        return
+    today = datetime.now().strftime("%Y-%m-%d")
+    lines = [f"📋 *Ваши активные задачи ({len(active)}):*\n"]
+    for t in active:
+        dl = t.get("deadline") or "—"
+        flag = " 🔴 *ПРОСРОЧЕНА*" if dl != "—" and dl < today else ""
+        lines.append(f"• *#{t['id']}* {t['title'][:50]}{flag}\n  📅 {dl} | /done {t['id']}")
+    await message.answer("\n".join(lines), parse_mode="Markdown")
 
+
+@router.callback_query(F.data.startswith("reg_"))
+async def handle_registration(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    choice = callback.data.replace("reg_", "")
+    if choice == "manual":
+        await state.set_state(TaskCreation.editing_field)
+        await state.update_data(editing="reg_name")
+        await callback.message.answer("✏️ Введите ваше имя (например: Луданная Л.):")
+        return
+    try:
+        idx = int(choice)
+        name = MANAGERS[idx]
+    except (ValueError, IndexError):
+        name = choice
+    register_user(callback.from_user.id, name)
+    await callback.message.answer(f"✅ Вы зарегистрированы как *{name}*!", parse_mode="Markdown")
+    await _show_main_menu(callback.message, name)
+    await _send_my_tasks(callback.message, name)
 
 @router.callback_query(F.data.startswith("menu_"))
 async def handle_menu(callback: CallbackQuery, state: FSMContext):
