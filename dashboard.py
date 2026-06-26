@@ -559,11 +559,11 @@ async def dashboard(request):
 
     # kpi
     kpi_items = [
-        ("linear-gradient(90deg,#3b82f6,#6366f1)", "📋", str(total_all), "white", "Всего задач", "Все проекты"),
-        ("linear-gradient(90deg,#f59e0b,#f97316)", "⚡", str(open_all), "#f59e0b", "В работе", "Активных"),
-        ("linear-gradient(90deg,#10b981,#06b6d4)", "✅", str(done_all), "#10b981", "Выполнено", f"{pct_all}% прогресс"),
-        ("linear-gradient(90deg,#ef4444,#dc2626)", "🔴", str(over_all), "#ef4444", "Просрочено", "Всё ок" if over_all==0 else "Внимание!"),
-        ("linear-gradient(90deg,#8b5cf6,#a78bfa)", "📅", str(today_dl), "#8b5cf6", "Дедлайн сегодня", "Нет срочных" if today_dl==0 else "Срочно!"),
+        ("linear-gradient(90deg,#3b82f6,#6366f1)", "📋", str(total_all), "#1a0505", "Всего задач", "Все проекты"),
+        ("linear-gradient(90deg,#f59e0b,#f97316)", "⚡", str(open_all), "#c45000", "В работе", "Активных"),
+        ("linear-gradient(90deg,#10b981,#06b6d4)", "✅", str(done_all), "#057a50", "Выполнено", f"{pct_all}% прогресс"),
+        ("linear-gradient(90deg,#ef4444,#dc2626)", "🔴", str(over_all), "#cc0000", "Просрочено", "Всё ок" if over_all==0 else "Внимание!"),
+        ("linear-gradient(90deg,#8b5cf6,#a78bfa)", "📅", str(today_dl), "#5b21b6", "Дедлайн сегодня", "Нет срочных" if today_dl==0 else "Срочно!"),
         ("linear-gradient(90deg,#06b6d4,#3b82f6)", "💎", f"{health}%", "#06b6d4", "Health Score", health_label),
     ]
     html += "<div class=\"kpi-grid\">\n"
