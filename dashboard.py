@@ -973,265 +973,435 @@ async def admin_merge(request):
 
 
 
-# ─── AI Агент постановки задач ─────────────────────────────────────────────
+# ─── AI Агент постановки задач (ПРОКАЧАННЫЙ) ──────────────────────────────
 @routes.get("/agent")
 async def agent_page(request):
     projects = get_projects()
-    project_options = "".join(f'<option value="{p["name"]}">{p["name"]}</option>' for p in projects)
+    proj_list = [p["name"] for p in projects]
     managers = ["Абдуллах Н.","Камалов Н.","Кострыкин И.","Яманова Э.","Аскарова М.",
                 "Кульбаева Б.","Мырзағали Е.","Елемес Е.","Оспанова А.","Луданная Л.",
                 "Маркелова И.","Мустафина А.","Куниязов З.","Турбина Е."]
-    manager_options = "".join(f'<option value="{m}">{m}</option>' for m in managers)
 
     html = """<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI Агент — Постановка задач</title>
+<title>AI Агент — MINISO</title>
 <style>
+:root{--red:#e83232;--red2:#ff6b6b;--bg:#f0f4fa;--white:#fff;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4fa;color:#0f172a;min-height:100vh;}
-.topbar{background:linear-gradient(160deg,#ffb3b3 0%,#ff6b6b 45%,#e83232 100%);padding:0 32px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50;}
-.topbar a{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);padding:6px 14px;border-radius:20px;}
-.topbar h1{color:white;font-size:16px;font-weight:700;flex:1;text-align:center;}
-.logo{background:white;color:#cc0000;font-weight:900;font-size:13px;padding:5px 10px;border-radius:4px;letter-spacing:2px;}
-.wrap{max-width:780px;margin:32px auto;padding:0 20px;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);height:100vh;display:flex;flex-direction:column;}
+.topbar{background:linear-gradient(160deg,#ffb3b3 0%,#ff6b6b 45%,#e83232 100%);padding:0 24px;height:56px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.logo{background:white;color:#cc0000;font-weight:900;font-size:12px;padding:4px 8px;border-radius:3px;letter-spacing:2px;}
+.topbar h1{color:white;font-size:15px;font-weight:700;flex:1;text-align:center;}
+.topbar a{color:rgba(255,255,255,.85);text-decoration:none;font-size:12px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);padding:5px 12px;border-radius:16px;}
 
-/* Chat area */
-.chat-box{background:white;border-radius:20px;box-shadow:0 2px 16px rgba(0,0,0,.08);min-height:420px;max-height:520px;overflow-y:auto;padding:24px;margin-bottom:16px;display:flex;flex-direction:column;gap:12px;}
-.msg{display:flex;gap:10px;align-items:flex-start;}
+/* Main layout */
+.main{display:flex;flex:1;overflow:hidden;}
+.sidebar{width:260px;background:white;border-right:1px solid #e8ecf3;display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar-head{padding:16px;border-bottom:1px solid #f1f5f9;}
+.sidebar-head h3{font-size:13px;font-weight:700;color:#374151;margin-bottom:10px;}
+.quick-btn{width:100%;text-align:left;padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;color:#374151;cursor:pointer;margin-bottom:6px;transition:all .15s;line-height:1.4;}
+.quick-btn:hover{background:#fff0f0;border-color:#fca5a5;color:#dc2626;}
+.quick-btn .q-label{font-weight:600;color:#dc2626;font-size:10px;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:2px;}
+.sidebar-history{flex:1;overflow-y:auto;padding:12px 16px;}
+.sidebar-history h3{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.hist-item{padding:8px 10px;border-radius:8px;margin-bottom:4px;cursor:pointer;transition:all .15s;border:1px solid transparent;}
+.hist-item:hover{background:#f8fafc;border-color:#e2e8f0;}
+.hist-item .h-title{font-size:12px;color:#374151;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hist-item .h-meta{font-size:11px;color:#94a3b8;margin-top:2px;}
+
+/* Chat */
+.chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.chat-messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:14px;}
+.msg{display:flex;gap:10px;align-items:flex-start;animation:fadeIn .2s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .msg.user{flex-direction:row-reverse;}
-.msg-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
-.msg.ai .msg-avatar{background:linear-gradient(135deg,#3b82f6,#8b5cf6);}
-.msg.user .msg-avatar{background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;font-size:12px;font-weight:700;}
-.msg-bubble{max-width:75%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.5;}
-.msg.ai .msg-bubble{background:#f1f5f9;color:#0f172a;border-bottom-left-radius:4px;}
-.msg.user .msg-bubble{background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;border-bottom-right-radius:4px;}
-.msg-bubble b{font-weight:600;}
-.msg-bubble .field{background:rgba(0,0,0,.05);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13px;}
-.msg.user .msg-bubble .field{background:rgba(255,255,255,.15);}
+.av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.msg.ai .av{background:linear-gradient(135deg,#3b82f6,#8b5cf6);}
+.msg.user .av{background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;font-size:11px;font-weight:700;}
+.bubble{max-width:72%;padding:12px 15px;border-radius:16px;font-size:13.5px;line-height:1.55;}
+.msg.ai .bubble{background:white;color:#0f172a;border-bottom-left-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.07);}
+.msg.user .bubble{background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;border-bottom-right-radius:4px;}
+.bubble b{font-weight:600;}
+.bubble i{opacity:.85;}
+.bubble ul{padding-left:16px;margin-top:6px;}
+.bubble li{margin-bottom:3px;}
 
 /* Task card */
-.task-card{background:white;border:2px solid #e83232;border-radius:16px;padding:20px 24px;margin:8px 0;}
-.task-card h3{font-size:15px;font-weight:700;color:#0f172a;margin-bottom:12px;}
-.task-field{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:13px;}
-.task-field:last-child{border:none;}
-.task-field label{color:#64748b;font-weight:500;}
-.task-field span{color:#0f172a;font-weight:600;text-align:right;max-width:60%;}
-.task-actions{display:flex;gap:10px;margin-top:14px;}
-.btn-confirm{padding:10px 22px;background:linear-gradient(135deg,#10b981,#059669);color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;}
-.btn-confirm:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(16,185,129,.3);}
-.btn-edit{padding:10px 22px;background:#f1f5f9;color:#374151;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;}
-.btn-cancel{padding:10px 22px;background:#fef2f2;color:#dc2626;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;}
+.task-card{background:white;border:2px solid #fca5a5;border-radius:14px;padding:18px 20px;margin:2px 0;box-shadow:0 2px 12px rgba(232,50,50,.08);width:100%;}
+.tc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.tc-head h3{font-size:14px;font-weight:700;color:#0f172a;}
+.tc-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;}
+.tc-badge.predicted{background:#fffbeb;color:#d97706;border-color:#fcd34d;}
+.field-row{display:flex;align-items:flex-start;padding:8px 0;border-bottom:1px solid #f8fafc;gap:8px;}
+.field-row:last-of-type{border:none;}
+.field-icon{font-size:14px;flex-shrink:0;margin-top:1px;}
+.field-label{font-size:11px;color:#94a3b8;font-weight:600;width:90px;flex-shrink:0;padding-top:1px;}
+.field-val{font-size:13px;color:#0f172a;font-weight:500;flex:1;}
+.field-val.missing{color:#dc2626;font-style:italic;}
+.tc-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+.btn{padding:9px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;}
+.btn-ok{background:linear-gradient(135deg,#10b981,#059669);color:white;}
+.btn-ok:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(16,185,129,.3);}
+.btn-edit{background:#f1f5f9;color:#374151;}
+.btn-edit:hover{background:#e2e8f0;}
+.btn-cancel{background:#fef2f2;color:#dc2626;}
+.btn-more{background:#eff6ff;color:#3b82f6;}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;}
 
-/* Edit form */
-.edit-form{background:#f8fafc;border-radius:14px;padding:18px;margin-top:10px;display:none;}
-.edit-form.open{display:block;}
-.edit-form label{display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em;}
-.edit-form input,.edit-form select,.edit-form textarea{width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:all .15s;background:white;}
-.edit-form input:focus,.edit-form select:focus,.edit-form textarea:focus{border-color:#e83232;box-shadow:0 0 0 3px rgba(232,50,50,.1);}
-.edit-form textarea{height:70px;resize:vertical;}
-.edit-form .save-btn{margin-top:14px;padding:10px 20px;background:#e83232;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;width:100%;}
+/* Inline edit */
+.edit-panel{background:#f8fafc;border-radius:10px;padding:14px;margin-top:10px;border:1px solid #e2e8f0;display:none;}
+.edit-panel.open{display:block;}
+.ep-row{margin-bottom:10px;}
+.ep-row label{display:block;font-size:11px;font-weight:600;color:#64748b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;}
+.ep-row input,.ep-row select,.ep-row textarea{width:100%;padding:8px 11px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;font-family:inherit;outline:none;transition:border .15s;}
+.ep-row input:focus,.ep-row select:focus,.ep-row textarea:focus{border-color:#e83232;}
+.ep-row textarea{height:60px;resize:vertical;}
+.ep-save{width:100%;padding:9px;background:#e83232;color:white;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;}
 
-/* Input area */
-.input-area{background:white;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.07);padding:16px;}
-.input-row{display:flex;gap:10px;align-items:flex-end;}
-.input-row textarea{flex:1;padding:12px 16px;border:1.5px solid #e2e8f0;border-radius:12px;font-size:14px;font-family:inherit;resize:none;height:52px;max-height:120px;outline:none;transition:border .15s;line-height:1.4;}
-.input-row textarea:focus{border-color:#e83232;box-shadow:0 0 0 3px rgba(232,50,50,.08);}
-.send-btn{width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;border:none;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;}
+/* Multi-task */
+.multi-card{background:white;border-radius:12px;padding:14px 16px;margin:2px 0;border:1px solid #e2e8f0;box-shadow:0 1px 4px rgba(0,0,0,.05);}
+.multi-card h4{font-size:13px;font-weight:700;margin-bottom:10px;color:#374151;}
+.mini-task{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;background:#f8fafc;margin-bottom:6px;cursor:pointer;border:1.5px solid transparent;transition:all .15s;}
+.mini-task:hover{border-color:#fca5a5;background:#fff5f5;}
+.mini-task input[type=checkbox]{accent-color:#e83232;width:15px;height:15px;flex-shrink:0;}
+.mini-task-info{flex:1;min-width:0;}
+.mini-task-title{font-size:12px;font-weight:500;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.mini-task-meta{font-size:11px;color:#94a3b8;margin-top:1px;}
+.multi-actions{display:flex;gap:8px;margin-top:10px;}
+
+/* Input */
+.input-wrap{padding:14px 20px;background:white;border-top:1px solid #e8ecf3;flex-shrink:0;}
+.input-inner{display:flex;gap:10px;align-items:flex-end;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:10px 14px;transition:border .15s;}
+.input-inner:focus-within{border-color:#e83232;background:white;box-shadow:0 0 0 3px rgba(232,50,50,.08);}
+.input-inner textarea{flex:1;background:transparent;border:none;outline:none;font-size:14px;font-family:inherit;resize:none;max-height:100px;line-height:1.5;color:#0f172a;}
+.input-inner textarea::placeholder{color:#94a3b8;}
+.send-btn{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;border:none;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;}
 .send-btn:hover{transform:scale(1.05);}
-.send-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
-.hint{font-size:12px;color:#94a3b8;margin-top:8px;text-align:center;}
+.send-btn:disabled{opacity:.4;transform:none;}
+.input-hints{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;}
+.hint-chip{font-size:11px;color:#94a3b8;cursor:pointer;padding:2px 8px;border-radius:10px;background:#f1f5f9;transition:all .15s;}
+.hint-chip:hover{background:#fee2e2;color:#dc2626;}
 
-/* Loading */
-.typing{display:flex;gap:5px;align-items:center;padding:12px 16px;background:#f1f5f9;border-radius:16px;border-bottom-left-radius:4px;width:fit-content;}
-.typing span{width:7px;height:7px;border-radius:50%;background:#94a3b8;animation:bounce .8s infinite;}
-.typing span:nth-child(2){animation-delay:.15s;}
-.typing span:nth-child(3){animation-delay:.3s;}
-@keyframes bounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-6px);}}
+/* Typing */
+.typing-dots{display:flex;gap:4px;align-items:center;padding:10px 14px;background:white;border-radius:14px;border-bottom-left-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.07);width:56px;}
+.typing-dots span{width:6px;height:6px;border-radius:50%;background:#94a3b8;animation:dot .8s infinite;}
+.typing-dots span:nth-child(2){animation-delay:.15s;}
+.typing-dots span:nth-child(3){animation-delay:.3s;}
+@keyframes dot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+
+/* Success */
+.success-banner{background:linear-gradient(135deg,#10b981,#059669);color:white;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:10px;}
+.success-banner .s-icon{font-size:22px;}
+.success-banner .s-text{flex:1;font-size:13px;}
+.success-banner .s-text b{font-size:14px;display:block;margin-bottom:2px;}
+.success-banner a{color:white;font-size:12px;background:rgba(255,255,255,.2);padding:4px 10px;border-radius:8px;text-decoration:none;}
 </style>
 </head>
 <body>
+
 <div class="topbar">
   <div class="logo">MINISO</div>
   <h1>🤖 AI Агент постановки задач</h1>
   <a href="/">← Дашборд</a>
 </div>
 
-<div class="wrap">
-  <div class="chat-box" id="chat">
+<div class="main">
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-head">
+    <h3>⚡ Быстрые шаблоны</h3>
+    <button class="quick-btn" onclick="useTemplate('Маркелова подготовить отчёт по складу Мирада до конца недели')">
+      <span class="q-label">Сверка баз</span>Отчёт по складу
+    </button>
+    <button class="quick-btn" onclick="useTemplate('Турбина проанализировать продажи по категории SKU за месяц')">
+      <span class="q-label">SC MINISO</span>Анализ продаж
+    </button>
+    <button class="quick-btn" onclick="useTemplate('Луданная разработать POSM-материалы для борда до 30 июня')">
+      <span class="q-label">Board Miniso</span>POSM материалы
+    </button>
+    <button class="quick-btn" onclick="useTemplate('Кострыкин исправить баг в системе срочно сегодня')">
+      <span class="q-label">IT задача</span>Срочная задача
+    </button>
+    <button class="quick-btn" onclick="showMultiMode()">
+      <span class="q-label">Несколько задач</span>📋 Поставить несколько задач сразу
+    </button>
+  </div>
+  <div class="sidebar-history">
+    <h3>История сессии</h3>
+    <div id="historyList"><div style="font-size:12px;color:#cbd5e1;text-align:center;padding:16px;">Ещё нет задач</div></div>
+  </div>
+</div>
+
+<!-- Chat -->
+<div class="chat-area">
+  <div class="chat-messages" id="chat">
     <div class="msg ai">
-      <div class="msg-avatar">🤖</div>
-      <div class="msg-bubble">
-        <b>Привет!</b> Я помогу поставить задачу.<br><br>
-        Опишите задачу в свободной форме — например:<br>
-        <i>"Маркелова подготовить отчёт по складу до 30 июня"</i><br><br>
-        Я сам пойму кому, что и когда нужно сделать.
+      <div class="av">🤖</div>
+      <div class="bubble">
+        <b>Привет! Я ваш AI-ассистент по постановке задач.</b><br><br>
+        Опишите задачу — я распознаю:<br>
+        <ul>
+          <li>Кому назначить</li>
+          <li>В какой проект</li>
+          <li>Срок выполнения</li>
+          <li>Формулировку задачи</li>
+        </ul><br>
+        Можно писать как угодно — голосом мысли, с ошибками, кратко. Я разберусь 👌
       </div>
     </div>
   </div>
 
-  <div class="input-area">
-    <div class="input-row">
-      <textarea id="userInput" placeholder="Опишите задачу..." rows="1"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
-        oninput="this.style.height='52px';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-      <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+  <div class="input-wrap">
+    <div class="input-inner">
+      <textarea id="inp" rows="1" placeholder="Опишите задачу в свободной форме..."
+        oninput="autoResize(this)"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="send()" title="Отправить (Enter)">➤</button>
     </div>
-    <div class="hint">Enter — отправить &nbsp;·&nbsp; Shift+Enter — новая строка</div>
+    <div class="input-hints">
+      <span class="hint-chip" onclick="useTemplate('Маркелова сделать отчёт по МДС до пятницы')">📊 Отчёт МДС</span>
+      <span class="hint-chip" onclick="useTemplate('Турбина проверить остатки по SKU')">📦 Проверить SKU</span>
+      <span class="hint-chip" onclick="useTemplate('Луданная подготовить презентацию для борда')">📋 Презентация</span>
+      <span class="hint-chip" onclick="useTemplate('Оспанова провести собеседование с кандидатом')">👤 HR задача</span>
+    </div>
   </div>
+</div>
+
 </div>
 
 <script>
 const MANAGERS = """ + str(managers) + """;
-const PROJECTS = """ + str([p["name"] for p in projects]) + """;
+const PROJECTS = """ + str(proj_list) + """;
 let pendingTask = null;
-let editMode = false;
+let sessionTasks = [];
+let multiMode = false;
 
-function addMessage(role, content) {
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,100)+'px';}
+
+function useTemplate(text){
+  document.getElementById('inp').value = text;
+  autoResize(document.getElementById('inp'));
+  document.getElementById('inp').focus();
+}
+
+function addMsg(role, html){
   const chat = document.getElementById('chat');
   const div = document.createElement('div');
   div.className = 'msg ' + role;
-  const initials = role === 'user' ? 'ВЫ' : '🤖';
-  div.innerHTML = `
-    <div class="msg-avatar">${initials}</div>
-    <div class="msg-bubble">${content}</div>
-  `;
+  const av = role==='user' ? '<div class="av" style="background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;font-size:11px;font-weight:700;">ВЫ</div>' : '<div class="av">🤖</div>';
+  div.innerHTML = av + `<div class="bubble">${html}</div>`;
   chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+  chat.scrollTop = 99999;
   return div;
 }
 
-function showTyping() {
+function addElement(el){
   const chat = document.getElementById('chat');
-  const div = document.createElement('div');
-  div.className = 'msg ai';
-  div.id = 'typing';
-  div.innerHTML = `<div class="msg-avatar">🤖</div><div class="typing"><span></span><span></span><span></span></div>`;
-  chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'padding:0 44px;';
+  wrap.appendChild(el);
+  chat.appendChild(wrap);
+  chat.scrollTop = 99999;
 }
 
-function removeTyping() {
-  const t = document.getElementById('typing');
-  if (t) t.remove();
+function showTyping(){
+  const chat = document.getElementById('chat');
+  const d = document.createElement('div');
+  d.className = 'msg ai'; d.id = 'typing';
+  d.innerHTML = '<div class="av">🤖</div><div class="typing-dots"><span></span><span></span><span></span></div>';
+  chat.appendChild(d); chat.scrollTop = 99999;
+}
+function hideTyping(){const t=document.getElementById('typing');if(t)t.remove();}
+
+function renderCard(task, idx=''){
+  const projectBadge = task._project_predicted
+    ? `<span class="tc-badge predicted">🎯 Предсказано</span>`
+    : (task.project ? `<span class="tc-badge">✓ Определён</span>` : `<span class="tc-badge" style="background:#fef2f2;color:#dc2626;">⚠️ Не определён</span>`);
+
+  const fv = (val, fallback='—') => val ? `<span class="field-val">${val}</span>` : `<span class="field-val missing">${fallback}</span>`;
+
+  return `<div class="task-card" id="card${idx}">
+    <div class="tc-head"><h3>📋 Задача распознана</h3>${projectBadge}</div>
+    <div class="field-row"><span class="field-icon">📌</span><span class="field-label">Название</span>${fv(task.title,'Не указано')}</div>
+    <div class="field-row"><span class="field-icon">👤</span><span class="field-label">Ответственный</span>${fv(task.assignee,'Не определён — выберите')}</div>
+    <div class="field-row"><span class="field-icon">📁</span><span class="field-label">Проект</span>${fv(task.project,'Не определён — выберите')}</div>
+    <div class="field-row"><span class="field-icon">📅</span><span class="field-label">Срок</span>${fv(task.deadline,'Не указан')}</div>
+    ${task.description && task.description !== task.title ? `<div class="field-row"><span class="field-icon">💬</span><span class="field-label">Описание</span><span class="field-val" style="font-size:12px;color:#64748b;">${task.description}</span></div>` : ''}
+    <div class="tc-actions">
+      <button class="btn btn-ok" onclick="confirm_${idx}()">✅ Создать задачу</button>
+      <button class="btn btn-edit" onclick="toggleEdit('edit${idx}')">✏️ Изменить</button>
+      <button class="btn btn-cancel" onclick="cancelCard('card${idx}')">✕</button>
+    </div>
+    <div class="edit-panel" id="edit${idx}">
+      <div class="ep-row"><label>Название задачи</label><textarea id="et_title${idx}">${task.title||''}</textarea></div>
+      <div class="ep-row"><label>Ответственный</label>
+        <select id="et_assignee${idx}"><option value="">— Выберите —</option>
+        ${MANAGERS.map(m=>`<option value="${m}"${m===task.assignee?' selected':''}>${m}</option>`).join('')}
+        </select></div>
+      <div class="ep-row"><label>Проект</label>
+        <select id="et_project${idx}"><option value="">— Выберите —</option>
+        ${PROJECTS.map(p=>`<option value="${p}"${p===task.project?' selected':''}>${p}</option>`).join('')}
+        </select></div>
+      <div class="ep-row"><label>Срок</label><input type="date" id="et_deadline${idx}" value="${task.deadline||''}"></div>
+      <button class="ep-save" onclick="saveEdit('${idx}')">💾 Сохранить</button>
+    </div>
+  </div>`;
 }
 
-function renderTaskCard(task) {
-  const today = new Date().toISOString().split('T')[0];
-  return `
-    <div class="task-card" id="taskCard">
-      <h3>📋 Распознанная задача</h3>
-      <div class="task-field"><label>Название</label><span>${task.title || '—'}</span></div>
-      <div class="task-field"><label>Ответственный</label><span>${task.assignee || '—'}</span></div>
-      <div class="task-field"><label>Проект</label><span>${task.project || '—'}</span></div>
-      <div class="task-field"><label>Срок</label><span>${task.deadline || '—'}</span></div>
-      ${task.description && task.description !== task.title ? `<div class="task-field"><label>Описание</label><span>${task.description}</span></div>` : ''}
-      <div class="task-actions">
-        <button class="btn-confirm" onclick="confirmTask()">✅ Создать задачу</button>
-        <button class="btn-edit" onclick="toggleEdit()">✏️ Изменить</button>
-        <button class="btn-cancel" onclick="cancelTask()">✕ Отмена</button>
-      </div>
-      <div class="edit-form" id="editForm">
-        <label>Название</label>
-        <textarea id="editTitle">${task.title || ''}</textarea>
-        <label>Ответственный</label>
-        <select id="editAssignee">
-          <option value="">— Выберите —</option>
-          ${MANAGERS.map(m => `<option value="${m}" ${m===task.assignee?'selected':''}>${m}</option>`).join('')}
-        </select>
-        <label>Проект</label>
-        <select id="editProject">
-          <option value="">— Выберите —</option>
-          ${PROJECTS.map(p => `<option value="${p}" ${p===task.project?'selected':''}>${p}</option>`).join('')}
-        </select>
-        <label>Срок</label>
-        <input type="date" id="editDeadline" value="${task.deadline || ''}">
-        <button class="save-btn" onclick="saveEdit()">💾 Сохранить изменения</button>
-      </div>
-    </div>`;
+function toggleEdit(id){document.getElementById(id).classList.toggle('open');}
+
+function cancelCard(id){
+  const el = document.getElementById(id);
+  if(el) el.closest('div').remove();
+  pendingTask = null;
+  addMsg('ai','Отменено. Опишите новую задачу.');
 }
 
-function toggleEdit() {
-  const form = document.getElementById('editForm');
-  form.classList.toggle('open');
+function saveEdit(idx){
+  if(!pendingTask) return;
+  pendingTask.title = document.getElementById('et_title'+idx).value;
+  pendingTask.assignee = document.getElementById('et_assignee'+idx).value;
+  pendingTask.project = document.getElementById('et_project'+idx).value;
+  pendingTask.deadline = document.getElementById('et_deadline'+idx).value;
+  pendingTask._project_predicted = false;
+  const card = document.getElementById('card'+idx);
+  if(card) card.outerHTML = renderCard(pendingTask, idx);
+  // Re-register confirm function
+  window['confirm_'+idx] = () => createTask(pendingTask, idx);
+  addMsg('ai','✅ Данные обновлены!');
 }
 
-function saveEdit() {
-  pendingTask.title = document.getElementById('editTitle').value;
-  pendingTask.assignee = document.getElementById('editAssignee').value;
-  pendingTask.project = document.getElementById('editProject').value;
-  pendingTask.deadline = document.getElementById('editDeadline').value;
-  const card = document.getElementById('taskCard');
-  if (card) card.outerHTML = renderTaskCard(pendingTask);
-  addMessage('ai', '✅ Данные обновлены! Нажмите <b>Создать задачу</b> для подтверждения.');
-}
-
-async function confirmTask() {
-  if (!pendingTask) return;
+async function createTask(task, idx){
+  const btn = document.querySelector(`#card${idx} .btn-ok`);
+  if(btn) btn.disabled = true;
   try {
-    const resp = await fetch('/agent/create', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(pendingTask)
+    const r = await fetch('/agent/create', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(task)
     });
-    const data = await resp.json();
-    const card = document.getElementById('taskCard');
-    if (card) card.remove();
-    addMessage('ai', `🎉 <b>Задача #${data.task_id} создана!</b><br><br>
-      📌 ${pendingTask.title}<br>
-      👤 ${pendingTask.assignee || '—'} &nbsp;·&nbsp; 📁 ${pendingTask.project || '—'} &nbsp;·&nbsp; 📅 ${pendingTask.deadline || '—'}<br><br>
-      Хотите поставить ещё одну задачу?`);
+    const d = await r.json();
+    const card = document.getElementById('card'+idx);
+    if(card) card.closest('div').remove();
+
+    // Success banner
+    const banner = document.createElement('div');
+    banner.className = 'success-banner';
+    banner.innerHTML = `<div class="s-icon">🎉</div><div class="s-text"><b>Задача #${d.task_id} создана!</b>${task.title} → ${task.assignee||'—'} · ${task.project||'—'} · ${task.deadline||'без срока'}</div><a href="/">Открыть</a>`;
+    addElement(banner);
+
+    // Add to history
+    sessionTasks.push({id: d.task_id, title: task.title, assignee: task.assignee, project: task.project});
+    updateHistory();
     pendingTask = null;
-  } catch(e) {
-    addMessage('ai', '❌ Ошибка при создании задачи. Попробуйте ещё раз.');
+
+    addMsg('ai', `Готово! Задача поставлена. Хотите добавить ещё одну?`);
+  } catch(e){
+    addMsg('ai','❌ Ошибка при создании. Попробуйте ещё раз.');
+    if(btn) btn.disabled = false;
   }
 }
 
-function cancelTask() {
-  const card = document.getElementById('taskCard');
-  if (card) card.remove();
-  pendingTask = null;
-  addMessage('ai', 'Отменено. Опишите новую задачу.');
+function updateHistory(){
+  const list = document.getElementById('historyList');
+  if(!sessionTasks.length){
+    list.innerHTML = '<div style="font-size:12px;color:#cbd5e1;text-align:center;padding:16px;">Ещё нет задач</div>';
+    return;
+  }
+  list.innerHTML = sessionTasks.slice().reverse().map(t => `
+    <div class="hist-item">
+      <div class="h-title">${t.title}</div>
+      <div class="h-meta">👤 ${t.assignee||'—'} · #${t.id}</div>
+    </div>`).join('');
 }
 
-async function sendMessage() {
-  const input = document.getElementById('userInput');
-  const text = input.value.trim();
-  if (!text || document.getElementById('sendBtn').disabled) return;
+function showMultiMode(){
+  multiMode = true;
+  addMsg('ai','📋 <b>Режим нескольких задач.</b><br><br>Перечислите задачи — каждую с новой строки или через точку.<br><br><i>Например:</i><br>Маркелова — отчёт по складу до пятницы<br>Турбина — анализ SKU<br>Луданная — POSM материалы для борда');
+}
 
-  input.value = '';
-  input.style.height = '52px';
-  addMessage('user', text);
+let taskIdx = 0;
+
+async function send(){
+  const inp = document.getElementById('inp');
+  const text = inp.value.trim();
+  if(!text || document.getElementById('sendBtn').disabled) return;
+  inp.value = ''; inp.style.height = 'auto';
   document.getElementById('sendBtn').disabled = true;
+
+  addMsg('user', text.replace(/\\n/g,'<br>'));
   showTyping();
 
   try {
-    const resp = await fetch('/agent/parse', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({text})
+    const r = await fetch('/agent/parse', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text, multi: multiMode})
     });
-    const task = await resp.json();
-    removeTyping();
-    pendingTask = task;
+    const data = await r.json();
+    hideTyping();
 
-    if (task.error) {
-      addMessage('ai', '❌ ' + task.error + '<br><br>Попробуйте описать задачу подробнее.');
+    if(data.error){
+      addMsg('ai', '❌ ' + data.error + '<br><br>Попробуйте переформулировать. Например: <i>"Маркелова — отчёт по складу до пятницы"</i>');
+    } else if(data.is_multiple && data.tasks){
+      // Multiple tasks
+      const mc = document.createElement('div');
+      mc.className = 'multi-card';
+      mc.innerHTML = `<h4>📋 Найдено ${data.tasks.length} задач</h4>` +
+        data.tasks.map((t,i) => `
+          <div class="mini-task" id="mt${i}">
+            <input type="checkbox" id="mtc${i}" checked>
+            <div class="mini-task-info">
+              <div class="mini-task-title">${t.title}</div>
+              <div class="mini-task-meta">👤 ${t.assignee||'—'} · 📁 ${t.project||'—'} · 📅 ${t.deadline||'—'}</div>
+            </div>
+          </div>`).join('') +
+        `<div class="multi-actions">
+          <button class="btn btn-ok" onclick="createMulti(${JSON.stringify(data.tasks).replace(/"/g,'&quot;')})">✅ Создать выбранные</button>
+          <button class="btn btn-cancel" onclick="this.closest('.multi-card').remove()">✕ Отмена</button>
+        </div>`;
+      addElement(mc);
     } else {
-      const msgDiv = addMessage('ai', 'Вот что я понял из вашего описания:');
-      msgDiv.querySelector('.msg-bubble').insertAdjacentHTML('afterend', renderTaskCard(task));
-      // Move card inside chat
-      const chat = document.getElementById('chat');
-      chat.appendChild(document.getElementById('taskCard').parentElement.lastElementChild || document.getElementById('taskCard'));
+      // Single task
+      pendingTask = data;
+      const idx = ++taskIdx;
+      window['confirm_'+idx] = () => createTask(data, idx);
+
+      const wrap = document.createElement('div');
+      wrap.innerHTML = renderCard(data, idx);
+      addElement(wrap.firstChild);
+
+      // Smart hint if project missing
+      if(!data.project){
+        addMsg('ai','⚠️ Не удалось определить проект. Пожалуйста, выберите проект в форме выше.');
+      } else if(data._project_predicted){
+        addMsg('ai',`🎯 Проект определён автоматически: <b>${data.project}</b>. Всё верно?`);
+      }
     }
-  } catch(e) {
-    removeTyping();
-    addMessage('ai', '❌ Ошибка соединения. Попробуйте ещё раз.');
+  } catch(e){
+    hideTyping();
+    addMsg('ai','❌ Ошибка соединения. Проверьте подключение.');
   }
   document.getElementById('sendBtn').disabled = false;
-  document.getElementById('chat').scrollTop = 99999;
+}
+
+async function createMulti(tasks){
+  let created = 0;
+  for(let i=0; i<tasks.length; i++){
+    const cb = document.getElementById('mtc'+i);
+    if(!cb || !cb.checked) continue;
+    try{
+      await fetch('/agent/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(tasks[i])});
+      sessionTasks.push({id:'?', title:tasks[i].title, assignee:tasks[i].assignee, project:tasks[i].project});
+      created++;
+    } catch(e){}
+  }
+  updateHistory();
+  document.querySelector('.multi-card')?.remove();
+  addMsg('ai',`✅ Создано <b>${created} задач</b>! <a href="/" style="color:#3b82f6;">Открыть дашборд →</a>`);
+  multiMode = false;
 }
 </script>
 </body>
@@ -1240,28 +1410,25 @@ async function sendMessage() {
 
 
 @routes.post("/agent/parse")
-async def agent_parse(request):
-    """AI парсинг задачи из текста."""
-    import json
+async def agent_parse_v2(request):
     from datetime import datetime
     data = await request.json()
     text = data.get("text", "").strip()
+    multi = data.get("multi", False)
     if not text:
         return web.json_response({"error": "Пустой текст"})
-
     try:
         from agent import parse_task_with_ai
         today = datetime.now().strftime("%Y-%m-%d")
         result = await parse_task_with_ai(text, today)
         if not result:
             return web.json_response({"error": "Не удалось распознать задачу"})
-        # Если нет проекта — подставляем первый доступный
-        # Если AI не определил проект — используем ML предсказание
+        # ML предсказание проекта если AI не определил
         if not result.get("project"):
-            predicted = predict_project(result.get("title", "") + " " + text)
+            predicted = predict_project(result.get("title","") + " " + text)
             if predicted:
                 result["project"] = predicted
-                result["_project_predicted"] = True  # флаг что предсказано, не уверены
+                result["_project_predicted"] = True
         result["_projects"] = [p["name"] for p in get_projects()]
         return web.json_response(result)
     except Exception as e:
@@ -1269,8 +1436,7 @@ async def agent_parse(request):
 
 
 @routes.post("/agent/create")
-async def agent_create(request):
-    """Создание задачи из агента."""
+async def agent_create_v2(request):
     data = await request.json()
     title = data.get("title", "Без названия")
     project = data.get("project", "Общие")
@@ -1282,9 +1448,9 @@ async def agent_create(request):
         deadline=data.get("deadline", ""),
         comment=data.get("description", ""),
     )
-    # Учимся — запоминаем связь слов задачи с проектом
     learn_project_from_task(title, project)
     return web.json_response({"task_id": task_id, "ok": True})
+
 
 def create_app():
     app = web.Application()
