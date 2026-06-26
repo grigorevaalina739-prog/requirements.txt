@@ -54,11 +54,13 @@ def migrate_bord_to_miniso():
         conn.execute("DELETE FROM projects WHERE name='Борд 16.06.2026'")
 
 def cleanup_users():
-    """Удаляет указанных пользователей из базы при запуске."""
+    """Удаляет/переименовывает пользователей при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
     with get_conn() as conn:
         for name in to_delete:
             conn.execute("DELETE FROM users WHERE name LIKE ?", (f"%{name}%",))
+        # Исправляем ник Лидии
+        conn.execute("UPDATE users SET name='Луданная Л.' WHERE name LIKE '%Lidiya%' OR name LIKE '%Лидия%' OR name LIKE '%lidiya%'")
 
 def init_db():
     with get_conn() as conn:
