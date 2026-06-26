@@ -152,7 +152,7 @@ def task_row(t, project_filter="", status_filter=""):
         f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#f0f7ff\';" '
         f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
         f'<td style="padding:14px 12px;color:#64748b;font-size:12px;font-weight:700;white-space:nowrap;">#{tid}</td>'
-        f'<td style="padding:14px 16px;min-width:300px;max-width:420px;">'
+        f'<td style="padding:14px 16px;min-width:360px;max-width:500px;">'
         f'<div style="font-weight:600;font-size:14px;color:#0f172a;line-height:1.5;letter-spacing:-.1px;">{t["title"]}</div>'
         f'</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
@@ -162,7 +162,7 @@ def task_row(t, project_filter="", status_filter=""):
         f'<span style="display:inline-flex;align-items:center;gap:6px;background:{sc_bg};color:{sc_color};padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;">'
         f'<span style="width:6px;height:6px;border-radius:50%;background:{sc_color};flex-shrink:0;"></span>'
         f'{t["status"]}</span></td>'
-        f'<td style="padding:14px 12px;font-size:13px;min-width:160px;">{comment_html}</td>'
+        f'<td style="padding:14px 8px;font-size:12px;min-width:80px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{comment_html}</td>'
         f'<td class="row-actions" style="padding:14px 12px;white-space:nowrap;">{actions_html}</td>'
         f'</tr>'
     )
@@ -664,7 +664,7 @@ async def dashboard(request):
         "<thead><tr>"
         + th("ID","id") + th("Задача") + th("Ответственный","assignee")
         + th("Проект") + th("Срок","deadline") + th("Статус","status")
-        + th("Комментарии") + th("Действия")
+        + th("Коммент.") + th("Действия")
         + "</tr></thead>"
     )
     html += (
