@@ -74,6 +74,15 @@ def dedup_tasks():
 def force_dedup():
     """Принудительная дедупликация — запускается при каждом старте."""
     dedup_tasks()
+    # Удалить конкретные известные дубли
+    with get_conn() as conn:
+        # Оставить только минимальный ID для каждой комбинации title+assignee+project
+        conn.execute("""
+            DELETE FROM tasks WHERE id NOT IN (
+                SELECT MIN(id) FROM tasks
+                GROUP BY LOWER(TRIM(title)), LOWER(TRIM(COALESCE(assignee,''))), LOWER(TRIM(COALESCE(project,'')))
+            )
+        """)
 
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
@@ -144,7 +153,7 @@ def init_db():
         """)
     logger.info("База данных инициализирована.")
     # Разовые операции при первом запуске
-    dedup_tasks()
+    force_dedup()
     cleanup_users()
     migrate_bord_to_miniso()
     seed_bord_16_06()
