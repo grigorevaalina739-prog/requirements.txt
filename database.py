@@ -280,13 +280,34 @@ def init_db():
         """)
     logger.info("База данных инициализирована.")
     # Разовые операции при первом запуске
-    force_dedup()
-    merge_task_assignees()
-    seed_sc_tasks_v2()
-    cleanup_users()
-    migrate_bord_to_miniso()
-    seed_bord_16_06()
-    fix_board_miniso_tasks()
+    try:
+        force_dedup()
+    except Exception as e:
+        print(f"force_dedup error: {e}")
+    try:
+        merge_task_assignees()
+    except Exception as e:
+        print(f"merge_task_assignees error: {e}")
+    try:
+        seed_sc_tasks_v2()
+    except Exception as e:
+        print(f"seed_sc_tasks_v2 error: {e}")
+    try:
+        cleanup_users()
+    except Exception as e:
+        print(f"cleanup_users error: {e}")
+    try:
+        migrate_bord_to_miniso()
+    except Exception as e:
+        print(f"migrate error: {e}")
+    try:
+        seed_bord_16_06()
+    except Exception as e:
+        print(f"seed_bord error: {e}")
+    try:
+        fix_board_miniso_tasks()
+    except Exception as e:
+        print(f"fix_board error: {e}")
 
 
 def get_projects():
