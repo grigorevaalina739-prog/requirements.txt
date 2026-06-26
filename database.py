@@ -53,6 +53,24 @@ def migrate_bord_to_miniso():
         conn.execute("UPDATE tasks SET project='Board Miniso' WHERE project='Борд 16.06.2026'")
         conn.execute("DELETE FROM projects WHERE name='Борд 16.06.2026'")
 
+
+def dedup_tasks():
+    """Удаляет дублирующиеся задачи — оставляет только первую по ID."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT id, title, assignee, project FROM tasks ORDER BY id ASC").fetchall()
+        seen = set()
+        to_delete = []
+        for row in rows:
+            key = (row["title"].strip().lower(), (row["assignee"] or "").strip().lower())
+            if key in seen:
+                to_delete.append(row["id"])
+            else:
+                seen.add(key)
+        if to_delete:
+            conn.executemany("DELETE FROM tasks WHERE id=?", [(i,) for i in to_delete])
+            return len(to_delete)
+        return 0
+
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
@@ -122,6 +140,7 @@ def init_db():
         """)
     logger.info("База данных инициализирована.")
     # Разовые операции при первом запуске
+    dedup_tasks()
     cleanup_users()
     migrate_bord_to_miniso()
     seed_bord_16_06()
