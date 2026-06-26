@@ -87,23 +87,28 @@ def managers_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-async def notify_assignee(bot: Bot, assignee: str, title: str, project: str, deadline: str):
+async def notify_assignee(bot: Bot, assignee: str, title: str, project: str, deadline: str, task_id: int = 0):
+    """Уведомляет всех ответственных (поддерживает несколько через запятую)."""
     if not assignee:
         return
-    user = get_user_by_name(assignee)
-    if user:
+    assignees = [a.strip() for a in assignee.split(",") if a.strip()]
+    for name in assignees:
+        user = get_user_by_name(name)
+        if not user:
+            continue
         try:
+            done_hint = f"\n\n/done {task_id} — отметить выполненной" if task_id else ""
             await bot.send_message(
                 user["telegram_id"],
                 f"📌 *Вам назначена задача!*\n\n"
                 f"📋 *Задача:* {title}\n"
-                f"📁 *Проект:* {project}\n"
-                f"📅 *Срок:* {deadline or '—'}\n\n"
-                f"_Откройте дашборд для подробностей._",
+                f"📁 *Проект:* {project or '—'}\n"
+                f"📅 *Срок:* {deadline or '—'}"
+                f"{done_hint}",
                 parse_mode="Markdown"
             )
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления: {e}")
+            logger.error(f"Ошибка уведомления {name}: {e}")
 
 
 def task_keyboard(parsed):
