@@ -60,6 +60,9 @@ def fix_board_miniso_tasks():
         )
         # Удаляем дубль #19 (оставляем #31 с правильным названием)
         conn.execute("DELETE FROM tasks WHERE id=19")
+        # Удаляем неверно загруженные задачи SC MINISO #32-37
+        for del_id in [32, 33, 34, 35, 36, 37]:
+            conn.execute("DELETE FROM tasks WHERE id=?", (del_id,))
         # Удаляем лишний комментарий из задачи #6
         conn.execute("DELETE FROM task_comments WHERE task_id=6 AND text LIKE '%прайс%'")
         conn.execute("DELETE FROM task_comments WHERE task_id=6 AND author='Система'")
