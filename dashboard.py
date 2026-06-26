@@ -958,6 +958,18 @@ async def admin_dedup2(request):
     return web.Response(text=f"✅ Удалено дублей: {deleted}. Было: {before}, стало: {after}", content_type="text/plain")
 
 
+@routes.get("/admin/delete-task/{task_id}")
+async def admin_delete_task(request):
+    from database import get_conn
+    task_id = int(request.match_info["task_id"])
+    with get_conn() as conn:
+        task = conn.execute("SELECT title FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if task:
+            conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+            return web.Response(text=f"✅ Удалена задача #{task_id}: {task[0]}", content_type="text/plain")
+        return web.Response(text=f"❌ Задача #{task_id} не найдена", content_type="text/plain")
+
+
 @routes.get("/admin/merge")
 async def admin_merge(request):
     from database import get_conn, merge_task_assignees
