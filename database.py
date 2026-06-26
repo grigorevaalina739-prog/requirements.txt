@@ -91,6 +91,32 @@ def force_dedup():
             )
         """)
 
+
+def merge_task_assignees():
+    """Объединяет задачи с одинаковым названием и проектом — ответственные через запятую."""
+    with get_conn() as conn:
+        # Находим группы задач с одинаковым title+project
+        rows = conn.execute("""
+            SELECT title, project, GROUP_CONCAT(id) as ids, GROUP_CONCAT(assignee) as assignees
+            FROM tasks
+            WHERE status != 'Архив'
+            GROUP BY LOWER(TRIM(title)), LOWER(TRIM(COALESCE(project,'')))
+            HAVING COUNT(*) > 1
+        """).fetchall()
+        for row in rows:
+            ids = [int(i) for i in row["ids"].split(",")]
+            assignees = [a.strip() for a in row["assignees"].split(",") if a.strip()]
+            # Уникальные ответственные
+            unique_assignees = list(dict.fromkeys(assignees))
+            combined = ", ".join(unique_assignees)
+            min_id = min(ids)
+            # Обновляем первую задачу
+            conn.execute("UPDATE tasks SET assignee=? WHERE id=?", (combined, min_id))
+            # Удаляем остальные
+            for dup_id in ids:
+                if dup_id != min_id:
+                    conn.execute("DELETE FROM tasks WHERE id=?", (dup_id,))
+
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
@@ -161,6 +187,7 @@ def init_db():
     logger.info("База данных инициализирована.")
     # Разовые операции при первом запуске
     force_dedup()
+    merge_task_assignees()
     cleanup_users()
     migrate_bord_to_miniso()
     seed_bord_16_06()
