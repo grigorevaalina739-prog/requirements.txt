@@ -128,6 +128,23 @@ def merge_task_assignees():
                     conn.execute("DELETE FROM tasks WHERE id=?", (dup_id,))
 
 
+
+def seed_sc_tasks_v2():
+    """Задачи SC MINISO от пользователя."""
+    PROJECT = "SC MINISO"
+    add_project(PROJECT)
+    TASKS = [{"title": "Логика заказа IP товаров: разделить на 3 показателя — IP База, Блайнд бокс, Единоразовый заказ", "assignee": "Турбина Е.", "deadline": "", "project": "SC MINISO"}, {"title": "Прописать логику заказа по каждой категории IP товара", "assignee": "Турбина Е.", "deadline": "", "project": "SC MINISO"}]
+    with get_conn() as conn:
+        existing = set(row[0] for row in conn.execute(
+            "SELECT title FROM tasks WHERE project=?", (PROJECT,)
+        ).fetchall())
+        for t in TASKS:
+            if t["title"] not in existing:
+                conn.execute(
+                    "INSERT INTO tasks (project, assignee, department, title, deadline, status, comment) VALUES (?,?,?,?,?,?,?)",
+                    (PROJECT, t["assignee"], "", t["title"], t["deadline"], "Открыта", "")
+                )
+
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
@@ -199,6 +216,7 @@ def init_db():
     # Разовые операции при первом запуске
     force_dedup()
     merge_task_assignees()
+    seed_sc_tasks_v2()
     cleanup_users()
     migrate_bord_to_miniso()
     seed_bord_16_06()
