@@ -104,31 +104,46 @@ def task_row(t, project_filter="", status_filter=""):
 
     tid = t['id']
     if t["status"] == "Выполнена":
-        done_btn = (
-            f'<a href="#" title="Переоткрыть" '
-            f'style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#F1F5F9;color:#64748B;text-decoration:none;font-size:14px;" '
-            f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">↩️</a>"
-            f'<a href="/archive/task/{tid}?back={back_url}" title="В архив" '
-            f'style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:rgba(139,92,246,.15);color:#8b5cf6;text-decoration:none;font-size:14px;" '
-            f"onclick=\"return confirm('Архивировать задачу #{tid}?')\">📦</a>"
+        done_btn_menu = (
+            f'<a href="#" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#374151;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
+            f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">↩️ Переоткрыть</a>"
+            f'<a href="/archive/task/{tid}?back={back_url}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#8b5cf6;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
+            f"onclick=\"return confirm('Архивировать задачу #{tid}?')\">📦 В архив</a>"
         )
     else:
-        done_btn = (
-            f'<a href="#" title="Выполнено" '
-            f'style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#ECFDF5;color:#059669;text-decoration:none;font-size:14px;" '
-            f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/done/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">✅</a>"
+        done_btn_menu = (
+            f'<a href="#" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#059669;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
+            f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/done/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">✅ Выполнено</a>"
+        )
+
+    def mi(label, href, color='#374151', onclick=''):
+        oc = f' onclick="{onclick}"' if onclick else ''
+        return f'<a href="{href}"{oc} style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:{color};text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
+
+    if t['status'] == 'Выполнена':
+        status_item = (
+            mi('↩️ Переоткрыть', '#', color='#64748B',
+               onclick=f"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;") + '↩️ Переоткрыть</a>'
+            + mi('📦 В архив', f'/archive/task/{tid}?back={back_url}', color='#8b5cf6',
+               onclick=f"return confirm('Архивировать задачу #{tid}?')") + '📦 В архив</a>'
+        )
+    else:
+        status_item = (
+            mi('✅ Выполнено', '#', color='#059669',
+               onclick=f"var n=prompt('Ваше имя:');if(n){{window.location='/done/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;") + '✅ Выполнено</a>'
         )
 
     actions_html = (
-        '<div style="display:flex;gap:4px;align-items:center;opacity:0;transition:opacity .15s;" class="row-actions-wrap">'
-        f'<a href="/edit/{tid}" title="Редактировать" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#EFF6FF;color:#3B82F6;text-decoration:none;font-size:14px;">✏️</a>'
-        f'<a href="/comment/{tid}" title="Комментарий" style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#F5F3FF;color:#7C3AED;text-decoration:none;font-size:14px;">💬</a>'
-        f'{done_btn}'
+        '<div style="display:flex;align-items:center;opacity:0;transition:opacity .15s;" class="row-actions-wrap">'
         '<div style="position:relative;display:inline-block;">'
-        '<button onclick="toggleMenu(this)" style="width:32px;height:32px;border-radius:50%;background:#F1F5F9;border:none;cursor:pointer;font-size:18px;color:#64748B;display:flex;align-items:center;justify-content:center;">⋯</button>'
-        '<div class="more-dropdown" style="display:none;position:absolute;right:0;top:36px;background:white;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:6px 0;">'
-        f'<a href="/attach/{tid}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#374151;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">📎 Вложения</a>'
-        f'<a href="/history/{tid}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#374151;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">🕐 История</a>'
+        '<button onclick="toggleMenu(this)" style="width:32px;height:32px;border-radius:8px;background:#F1F5F9;border:1px solid #E2E8F0;cursor:pointer;color:#64748B;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;letter-spacing:1px;">···</button>'
+        '<div class="more-dropdown" style="display:none;position:absolute;right:0;top:36px;background:white;border:1px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;min-width:190px;padding:6px 0;">'
+        f'{mi("✏️ Редактировать", f"/edit/{tid}")}✏️ Редактировать</a>'
+        f'{mi("💬 Комментарий", f"/comment/{tid}")}💬 Комментарий</a>'
+        f'{status_item}'
+        '<div style="height:1px;background:#F1F5F9;margin:4px 0;"></div>'
+        f'{mi("📎 Вложения", f"/attach/{tid}")}📎 Вложения</a>'
+        f'{mi("🕐 История", f"/history/{tid}")}🕐 История</a>'
         '</div></div></div>'
     )
 
@@ -137,8 +152,8 @@ def task_row(t, project_filter="", status_filter=""):
         f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#f0f7ff\';" '
         f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
         f'<td style="padding:14px 12px;color:#64748b;font-size:12px;font-weight:700;white-space:nowrap;">#{tid}</td>'
-        f'<td style="padding:14px 16px;min-width:240px;">'
-        f'<div style="font-weight:500;font-size:14px;color:#0f172a;line-height:1.5;">{t["title"]}</div>'
+        f'<td style="padding:14px 16px;min-width:300px;max-width:420px;">'
+        f'<div style="font-weight:600;font-size:14px;color:#0f172a;line-height:1.5;letter-spacing:-.1px;">{t["title"]}</div>'
         f'</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
