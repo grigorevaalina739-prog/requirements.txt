@@ -127,6 +127,24 @@ def merge_task_assignees():
                 if dup_id != min_id:
                     conn.execute("DELETE FROM tasks WHERE id=?", (dup_id,))
 
+
+def seed_sc_miniso():
+    """Импорт задач из Google Sheets SC MINISO (встреча 05.03.2026)."""
+    PROJECT = "SC MINISO"
+    add_project(PROJECT)
+    TASKS = [{"assignee": "Турбина Е.", "title": "Получить от Антона подтверждение по разработанному шаблону и приступить к наполнению таблицы", "deadline": "2026-03-15", "status": "Открыта"}, {"assignee": "Кострыкин И.", "title": "Уточнить у Антона формат взаимодействия по проверке товаров до загрузки на WMS", "deadline": "2026-03-15", "status": "Открыта"}, {"assignee": "Турбина Е.", "title": "Подготовить ТЗ по категоризации товаров для SC", "deadline": "2026-03-15", "status": "Открыта"}, {"assignee": "Кусайынова А.", "title": "Актуализировать список партнёров для потенциального сотрудничества по SC", "deadline": "2026-03-15", "status": "Открыта"}, {"assignee": "Кусайынова А.", "title": "Запросить данные о конкурентах (аналоги SC в других странах): ассортимент и ценообразование", "deadline": "2026-03-15", "status": "Открыта"}, {"assignee": "Кострыкин И.", "title": "Заказать дополнительный плетеный стеллаж (20 штук)", "deadline": "2026-03-15", "status": "Открыта"}]
+    with get_conn() as conn:
+        existing = set(row[0] for row in conn.execute(
+            "SELECT title FROM tasks WHERE project=?", (PROJECT,)
+        ).fetchall())
+        for t in TASKS:
+            if t["title"] in existing:
+                continue
+            conn.execute(
+                "INSERT INTO tasks (project, assignee, department, title, deadline, status, comment) VALUES (?,?,?,?,?,?,?)",
+                (PROJECT, t["assignee"], "", t["title"], t["deadline"], t["status"], "")
+            )
+
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
@@ -198,6 +216,7 @@ def init_db():
     # Разовые операции при первом запуске
     force_dedup()
     merge_task_assignees()
+    seed_sc_miniso()
     cleanup_users()
     migrate_bord_to_miniso()
     seed_bord_16_06()
