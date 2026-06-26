@@ -71,6 +71,10 @@ def dedup_tasks():
             return len(to_delete)
         return 0
 
+def force_dedup():
+    """Принудительная дедупликация — запускается при каждом старте."""
+    dedup_tasks()
+
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
