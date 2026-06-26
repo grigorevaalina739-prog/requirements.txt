@@ -364,8 +364,7 @@ def get_overdue_tasks():
         ).fetchall()]
 
 def clear_tasks_from_sheet(spreadsheet_id: str):
-    with get_conn() as conn:
-        conn.execute("DELETE FROM tasks WHERE source_sheet=?", (spreadsheet_id,))
+    """Заглушка — не используется."""
     return True
 
 def register_user(telegram_id: int, name: str):
