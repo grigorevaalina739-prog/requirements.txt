@@ -423,7 +423,7 @@ async def dashboard(request):
         ".kpi:hover{transform:translateY(-3px);border-color:#93c5fd;box-shadow:0 8px 24px rgba(79,126,247,.12);}\n"
         ".kpi-top{position:absolute;top:0;left:0;right:0;height:2px;}\n"
         ".kpi-icon{font-size:18px;margin-bottom:8px;}\n"
-        ".kpi-num{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1;}\n"
+        ".kpi-num{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1;color:#1a0505;}\n"
         ".kpi-label{font-size:11px;color:#64748b;margin-top:3px;font-weight:500;}\n"
         ".kpi-sub{font-size:10px;color:#94a3b8;margin-top:6px;padding-top:6px;border-top:1px solid #f1f5f9;opacity:.9;}\n"
         ".prog-card{background:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.75);border-radius:14px;padding:18px 20px;margin-bottom:18px;backdrop-filter:blur(8px);}\n"
