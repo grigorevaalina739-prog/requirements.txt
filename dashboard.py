@@ -607,10 +607,25 @@ async def dashboard(request):
 
     # table
     table_body = rows if rows else '<tr><td colspan="8"><div class="empty-st"><div style="font-size:36px;margin-bottom:10px;">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'
+
+    def th(label, col=None):
+        if col:
+            nd = "desc" if (sort_by == col and sort_dir == "asc") else "asc"
+            href = f"/?project={selected}&status={status_filter}&q={search_value}&assignee={assignee_filter}&deadline_filter={deadline_filter}&sort={col}&dir={nd}"
+            arr = (" ↑" if sort_dir=="asc" else " ↓") if sort_by==col else " ↕"
+            return f'<th onclick="location.href=\'{href}\'" style="cursor:pointer;user-select:none;">{label}{arr}</th>'
+        return f"<th>{label}</th>"
+
+    thead_row = (
+        "<thead><tr>"
+        + th("ID","id") + th("Задача") + th("Ответственный","assignee")
+        + th("Проект") + th("Срок","deadline") + th("Статус","status")
+        + th("Комментарии") + th("Действия")
+        + "</tr></thead>"
+    )
     html += (
         "<div class=\"tbl-wrap\">\n<table>\n"
-        "<thead><tr><th>ID</th><th>Задача</th><th>Ответственный</th><th>Проект</th>"
-        "<th>Срок</th><th>Статус</th><th>Комментарии</th><th>Действия</th></tr></thead>\n"
+        f"{thead_row}\n"
         f"<tbody>{table_body}</tbody>\n</table>\n</div>\n"
     )
 
