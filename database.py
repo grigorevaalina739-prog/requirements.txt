@@ -129,11 +129,13 @@ def merge_task_assignees():
 
 
 
+
+
 def seed_sc_tasks_v2():
     """Задачи SC MINISO от пользователя."""
     PROJECT = "SC MINISO"
     add_project(PROJECT)
-    TASKS = [{"title": "Логика заказа IP товаров: разделить на 3 показателя — IP База, Блайнд бокс, Единоразовый заказ", "assignee": "Турбина Е.", "deadline": "", "project": "SC MINISO"}, {"title": "Прописать логику заказа по каждой категории IP товара", "assignee": "Турбина Е.", "deadline": "", "project": "SC MINISO"}]
+    TASKS = [{"title": "Создать папку в AI Claude — отдел закупа", "assignee": "Турбина Е.", "deadline": ""}, {"title": "Найти топовые расчески, проверить наличие следующего МДС", "assignee": "Турбина Е.", "deadline": ""}, {"title": "Провести глубокий анализ категорий: влажные салфетки, бальзамы для губ, Yupilow, парфюм", "assignee": "Турбина Е.", "deadline": ""}, {"title": "Крем для рук 990 тенге — проверить МДС на наличие", "assignee": "Турбина Е.", "deadline": ""}, {"title": "Крем Fruit Energy 1890 — распределить по магазинам", "assignee": "Турбина Е.", "deadline": ""}, {"title": "Крем для рук Sakura — проверить сроки годности", "assignee": "Турбина Е.", "deadline": ""}, {"title": "Food-категория: расширить ввод в крупных магазинах Алматы и Астаны", "assignee": "Турбина Е.", "deadline": ""}, {"title": "По каждому товару определить тип размещения: блистер, полка, способ крепления товара", "assignee": "Турбина Е.", "deadline": ""}]
     with get_conn() as conn:
         existing = set(row[0] for row in conn.execute(
             "SELECT title FROM tasks WHERE project=?", (PROJECT,)
