@@ -211,6 +211,80 @@ def seed_sc_tasks_v2():
                     (PROJECT, t["assignee"], "", t["title"], t["deadline"], "Открыта", "")
                 )
 
+
+def init_project_patterns():
+    """Создаёт таблицу паттернов проектов."""
+    with get_conn() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_patterns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                keyword TEXT NOT NULL,
+                project TEXT NOT NULL,
+                weight INTEGER DEFAULT 1,
+                UNIQUE(keyword, project)
+            )
+        """)
+        # Базовые паттерны из коробки
+        base = [
+            ("sc", "SC MINISO"), ("закуп", "SC MINISO"), ("товар", "SC MINISO"),
+            ("sku", "SC MINISO"), ("мдс", "SC MINISO"), ("поставщик", "SC MINISO"),
+            ("заказ", "SC MINISO"), ("ip", "SC MINISO"), ("sku", "SC MINISO"),
+            ("аДС", "SC MINISO"), ("адс", "SC MINISO"), ("прогноз", "SC MINISO"),
+            ("борд", "Board Miniso"), ("board", "Board Miniso"), ("posm", "Board Miniso"),
+            ("пакет", "Board Miniso"), ("стратегия", "Board Miniso"), ("встреча", "Board Miniso"),
+            ("сверка", "Сверка баз"), ("склад", "Сверка баз"), ("мирада", "Сверка баз"),
+            ("накладная", "Сверка баз"), ("списание", "Сверка баз"), ("инвентаризация", "Сверка баз"),
+        ]
+        for kw, proj in base:
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO project_patterns (keyword, project, weight) VALUES (?,?,?)",
+                    (kw.lower(), proj, 5)
+                )
+            except Exception:
+                pass
+
+
+def learn_project_from_task(title: str, project: str):
+    """Запоминает связь слов из задачи с проектом."""
+    if not title or not project:
+        return
+    words = [w.lower().strip(".,!?:;") for w in title.split() if len(w) > 3]
+    with get_conn() as conn:
+        for word in words[:8]:  # Берём первые 8 слов
+            try:
+                conn.execute("""
+                    INSERT INTO project_patterns (keyword, project, weight) VALUES (?,?,1)
+                    ON CONFLICT(keyword, project) DO UPDATE SET weight = weight + 1
+                """, (word, project))
+            except Exception:
+                pass
+
+
+def predict_project(title: str) -> str:
+    """Предсказывает проект по тексту задачи на основе обученных паттернов."""
+    if not title:
+        return ""
+    words = [w.lower().strip(".,!?:;") for w in title.split() if len(w) > 3]
+    if not words:
+        return ""
+    try:
+        with get_conn() as conn:
+            scores = {}
+            for word in words:
+                rows = conn.execute(
+                    "SELECT project, weight FROM project_patterns WHERE keyword=? ORDER BY weight DESC",
+                    (word,)
+                ).fetchall()
+                for row in rows:
+                    proj = row["project"]
+                    scores[proj] = scores.get(proj, 0) + row["weight"]
+            if scores:
+                return max(scores, key=scores.get)
+    except Exception:
+        pass
+    return ""
+
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
     to_delete = ["Аскарова", "Елемес", "Яманова"]
@@ -280,6 +354,15 @@ def init_db():
         """)
     logger.info("База данных инициализирована.")
     # Разовые операции при первом запуске
+    try:
+        init_project_patterns()
+        # Обучаем на всех существующих задачах
+        with get_conn() as conn:
+            rows = conn.execute("SELECT title, project FROM tasks WHERE project!='' AND title!=''").fetchall()
+            for row in rows:
+                learn_project_from_task(row["title"], row["project"])
+    except Exception as e:
+        print(f'init_project_patterns error: {e}')
     try:
         force_dedup()
     except Exception as e:
