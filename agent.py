@@ -49,6 +49,11 @@ SINGLE_TASK_PROMPT = """Ты — ассистент постановки зад�
 - "на следующей неделе" → ближайший понедельник
 - Конкретная дата "10 июля" → YYYY-MM-DD
 
+ИСПОЛЬЗОВАНИЕ КОНТЕКСТА:
+- Если в блоке КОНТЕКСТ КОМПАНИИ есть похожие задачи — используй их стиль формулировки
+- Если есть похожий проект — подставь его
+- Учись на примерах выполненных задач компании
+
 Верни ТОЛЬКО валидный JSON:
 {
   "is_multiple": false,
@@ -102,12 +107,46 @@ async def _call_claude(messages, system=None, max_tokens=2000):
         return None
 
 
+def get_task_context() -> str:
+    """Собирает контекст из истории задач для обучения AI."""
+    try:
+        import sqlite3, os
+        db_path = os.environ.get("DB_PATH", "tasks.db")
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        # Берём последние 30 выполненных задач как образцы
+        rows = conn.execute(
+            "SELECT title, assignee, project, department FROM tasks "
+            "WHERE status='Выполнена' ORDER BY id DESC LIMIT 30"
+        ).fetchall()
+        # Берём все уникальные проекты
+        projects = conn.execute("SELECT name FROM projects").fetchall()
+        conn.close()
+
+        context_lines = []
+        if projects:
+            context_lines.append("ПРОЕКТЫ КОМПАНИИ: " + ", ".join(p["name"] for p in projects))
+
+        if rows:
+            context_lines.append("\nПРИМЕРЫ ВЫПОЛНЕННЫХ ЗАДАЧ (используй как образец формулировок):")
+            for r in rows:
+                context_lines.append(f"- [{r['project']}] {r['title']} → {r['assignee'] or '—'}")
+
+        return "\n".join(context_lines) if context_lines else ""
+    except Exception:
+        return ""
+
+
 async def parse_task_with_ai(user_text: str, today: str):
     """Возвращает одну задачу или список задач."""
+    # Добавляем контекст из истории задач
+    task_context = get_task_context()
+    context_block = f"\n\nКОНТЕКСТ КОМПАНИИ:\n{task_context}" if task_context else ""
+
     raw = await _call_claude(
         messages=[{
             "role": "user",
-            "content": f"Сегодня {today}. Обработай текст и верни JSON:\n\n{user_text}"
+            "content": f"Сегодня {today}.{context_block}\n\nОбработай текст и верни JSON:\n\n{user_text}"
         }],
         system=SINGLE_TASK_PROMPT,
         max_tokens=2000,
@@ -182,3 +221,75 @@ async def generate_overdue_summary(tasks: list) -> str:
     return "\n".join(lines)
 
 
+
+
+async def learn_from_task(task_id: int):
+    """Запоминает паттерн задачи для будущего использования."""
+    # Паттерны хранятся в отдельной таблице task_patterns
+    try:
+        import sqlite3, os
+        db_path = os.environ.get("DB_PATH", "tasks.db")
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        # Создаём таблицу паттернов если нет
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS task_patterns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                keyword TEXT,
+                assignee TEXT,
+                project TEXT,
+                department TEXT,
+                example_title TEXT,
+                used_count INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        # Получаем задачу
+        task = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if task and task["title"] and task["assignee"]:
+            # Извлекаем ключевые слова из названия
+            words = [w.lower() for w in task["title"].split() if len(w) > 4]
+            for word in words[:3]:
+                existing = conn.execute(
+                    "SELECT id, used_count FROM task_patterns WHERE keyword=? AND assignee=?",
+                    (word, task["assignee"])
+                ).fetchone()
+                if existing:
+                    conn.execute(
+                        "UPDATE task_patterns SET used_count=used_count+1 WHERE id=?",
+                        (existing["id"],)
+                    )
+                else:
+                    conn.execute(
+                        "INSERT INTO task_patterns (keyword, assignee, project, department, example_title) VALUES (?,?,?,?,?)",
+                        (word, task["assignee"], task["project"] or "", task["department"] or "", task["title"])
+                    )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Ошибка сохранения паттерна: {e}")
+
+
+def get_smart_suggestions(user_text: str) -> dict:
+    """Подбирает подсказки на основе истории паттернов."""
+    try:
+        import sqlite3, os
+        db_path = os.environ.get("DB_PATH", "tasks.db")
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        words = [w.lower() for w in user_text.split() if len(w) > 3]
+        best = None
+        best_score = 0
+        for word in words:
+            rows = conn.execute(
+                "SELECT * FROM task_patterns WHERE keyword LIKE ? ORDER BY used_count DESC LIMIT 3",
+                (f"%{word}%",)
+            ).fetchall()
+            for r in rows:
+                if r["used_count"] > best_score:
+                    best_score = r["used_count"]
+                    best = dict(r)
+        conn.close()
+        return best or {}
+    except Exception:
+        return {}
