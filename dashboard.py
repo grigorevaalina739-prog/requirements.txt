@@ -727,7 +727,7 @@ async def dashboard(request):
         "function closeCmd(){document.getElementById('cmdOv').classList.remove('open');}\n"
         "document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openCmd();}if(e.key==='Escape')closeCmd();});\n"
         "function filterCmd(v){document.querySelectorAll('#cmdIt .cmd-item').forEach(function(el){el.style.display=v&&!el.textContent.toLowerCase().includes(v.toLowerCase())?'none':'';});}\n"
-        "function toggleMenu(btn){var m=btn.nextElementSibling;document.querySelectorAll('.more-dropdown').forEach(function(d){if(d!==m)d.style.display='none';});m.style.display=m.style.display==='block'?'none':'block';event.stopPropagation();}\n"
+        "function toggleMenu(btn){var m=btn.nextElementSibling;document.querySelectorAll('.more-dropdown').forEach(function(d){if(d!==m)d.style.display='none';});if(m.style.display==='block'){m.style.display='none';return;}var r=btn.getBoundingClientRect();var openUp=(window.innerHeight-r.bottom)<230;m.style.position='fixed';m.style.left=Math.max(8,r.right-150)+'px';if(openUp){m.style.top='auto';m.style.bottom=(window.innerHeight-r.top)+'px';}else{m.style.bottom='auto';m.style.top=r.bottom+'px';}m.style.display='block';event.stopPropagation();}\n"
         "document.addEventListener('click',function(){document.querySelectorAll('.more-dropdown').forEach(function(m){m.style.display='none';});});\n"
         "</script>\n</body>\n</html>"
     )
