@@ -7,7 +7,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from agent import parse_task_with_ai, parse_deadline, analyze_project_tasks
+from agent import parse_task_with_ai, parse_deadline
 from database import (add_task, get_tasks, update_status, get_projects,
                       add_project, get_overdue_tasks, get_stats,
                       register_user, get_user_by_name, get_conn,
@@ -34,6 +34,10 @@ class ProjectAdding(StatesGroup):
     waiting_for_name = State()
 
 
+class Registration(StatesGroup):
+    waiting_for_name = State()
+
+
 class TaskEditing(StatesGroup):
     choosing_field = State()
     editing_field = State()
@@ -52,6 +56,7 @@ FIELD_LABELS = {
     "project": "Проект",
     "deadline": "Срок",
     "comment": "Комментарий",
+    "status": "Статус",
 }
 
 # Список руководителей для быстрого выбора
@@ -186,6 +191,7 @@ def edit_task_keyboard(task_id):
         [InlineKeyboardButton(text="📅 Изменить срок", callback_data=f"etask_deadline_{task_id}")],
         [InlineKeyboardButton(text="📁 Изменить проект", callback_data=f"etask_project_{task_id}")],
         [InlineKeyboardButton(text="💬 Изменить комментарий", callback_data=f"etask_comment_{task_id}")],
+        [InlineKeyboardButton(text="📜 История изменений", callback_data=f"etask_history_{task_id}")],
         [InlineKeyboardButton(text="🗑 Удалить задачу", callback_data=f"etask_delete_{task_id}")],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="cancel_task")],
     ])
@@ -225,7 +231,7 @@ def format_task_text(parsed):
     project = parsed.get("project") or "—"
     desc = parsed.get("description") or ""
     lines = [
-        f"📋 *Задача распознана:*\n",
+        "📋 *Задача распознана:*\n",
         f"📌 *{parsed.get('title') or '—'}*",
     ]
     if desc and desc != parsed.get("title"):
@@ -234,7 +240,7 @@ def format_task_text(parsed):
         f"\n👤 Ответственный: {assignee}",
         f"📅 Срок: {deadline}",
         f"📁 Проект: {project}",
-        f"\n✅ *Всё верно?*"
+        "\n✅ *Всё верно?*"
     ]
     return "\n".join(lines)
 
@@ -379,8 +385,7 @@ async def handle_registration(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     choice = callback.data.replace("reg_", "")
     if choice == "manual":
-        await state.set_state(TaskCreation.editing_field)
-        await state.update_data(editing="reg_name")
+        await state.set_state(Registration.waiting_for_name)
         await callback.message.answer("✏️ Введите ваше имя (например: Луданная Л.):")
         return
     try:
@@ -392,6 +397,15 @@ async def handle_registration(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(f"✅ Вы зарегистрированы как *{name}*!", parse_mode="Markdown")
     await _show_main_menu(callback.message, name)
     await _send_my_tasks(callback.message, name)
+  @router.message(Registration.waiting_for_name)
+async def save_manual_registration(message: Message, state: FSMContext):
+    name = message.text.strip()
+    await state.clear()
+    register_user(message.from_user.id, name)
+    await message.answer(f"✅ Вы зарегистрированы как *{name}*!", parse_mode="Markdown")
+    await _show_main_menu(message, name)
+    await _send_my_tasks(message, name)
+
 
 @router.callback_query(F.data.startswith("menu_"))
 async def handle_menu(callback: CallbackQuery, state: FSMContext):
@@ -455,7 +469,6 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
         projects = get_projects()
         if not projects:
             await callback.message.answer("📁 Проектов пока нет.")
-            await callback.answer()
             return
         buttons = [[InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"attach_proj_{p['name']}")] for p in projects]
         buttons.append([InlineKeyboardButton(text="📋 Все задачи", callback_data="attach_proj_ALL")])
@@ -780,9 +793,7 @@ async def quickedit_task(callback: CallbackQuery, state: FSMContext):
         parse_mode="Markdown"
     )
     await callback.answer()
-
-
-# ─── /edit ─────────────────────────────────────────────────────────────────
+  # ─── /edit ─────────────────────────────────────────────────────────────────
 @router.message(Command("edit"))
 async def cmd_edit(message: Message, state: FSMContext):
     parts = message.text.split()
@@ -818,6 +829,23 @@ async def etask_choose_field(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
+    if field == "history":
+        history = get_task_history(int(task_id))
+        await callback.answer()
+        if not history:
+            await callback.message.answer(f"📜 История изменений задачи #{task_id} пуста.")
+            return
+        lines = [f"📜 *История изменений задачи #{task_id}:*\n"]
+        for h in history[:20]:
+            field_label = FIELD_LABELS.get(h.get("field"), h.get("field"))
+            when = (h.get("changed_at") or "")[:16]
+            old_v = h.get("old_value") or "—"
+            new_v = h.get("new_value") or "—"
+            who = h.get("changed_by") or "—"
+            lines.append(f"• [{when}] *{field_label}*: {old_v} → {new_v}\n   👤 {who}")
+        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+        return
+
     await state.update_data(etask_field=field, editing_task_id=int(task_id))
     if field == "project":
         projects = get_projects()
@@ -847,8 +875,16 @@ async def etask_choose_project(callback: CallbackQuery, state: FSMContext):
         project = projects[proj_idx]["name"]
     except IndexError:
         project = ""
+    tasks_before = get_tasks()
+    task_before = next((t for t in tasks_before if t["id"] == task_id), None)
+    old_project = task_before.get("project", "") if task_before else ""
     with get_conn() as conn:
         conn.execute("UPDATE tasks SET project=? WHERE id=?", (project, task_id))
+    if project != old_project:
+        with get_conn() as conn:
+            user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+        author = user["name"] if user else (callback.from_user.first_name or "Неизвестно")
+        log_task_change(task_id, author, "project", old_project, project)
     tasks = get_tasks()
     task = next((t for t in tasks if t["id"] == task_id), None)
     await state.set_state(TaskEditing.choosing_field)
@@ -870,16 +906,18 @@ async def etask_save_field(message: Message, state: FSMContext):
         value = await parse_deadline(value) or value
     tasks_before = get_tasks()
     task_before = next((t for t in tasks_before if t["id"] == task_id), None)
-    old_deadline = task_before.get("deadline", "") if task_before else ""
+    old_value = task_before.get(field, "") if task_before else ""
     with get_conn() as conn:
         conn.execute(f"UPDATE tasks SET {field}=? WHERE id=?", (value, task_id))
     tasks = get_tasks()
     task = next((t for t in tasks if t["id"] == task_id), None)
-    if field == "deadline" and task and value != old_deadline:
+    if task and value != old_value:
         with get_conn() as conn:
             user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
         author = user["name"] if user else (message.from_user.first_name or "Неизвестно")
-        await notify_deadline_changed(message.bot, task.get("assignee", ""), task["title"], old_deadline, value, task_id, changed_by=author)
+        log_task_change(task_id, author, field, old_value, value)
+        if field == "deadline":
+            await notify_deadline_changed(message.bot, task.get("assignee", ""), task["title"], old_value, value, task_id, changed_by=author)
     await state.set_state(TaskEditing.choosing_field)
     await message.answer(
         format_existing_task(task),
@@ -1147,10 +1185,7 @@ async def edit_field(callback: CallbackQuery, state: FSMContext):
     await state.set_state(TaskCreation.editing_field)
     await callback.message.answer(f"✏️ Введите *{FIELD_LABELS.get(field, field)}*:", parse_mode="Markdown")
     await callback.answer()
-
-
-@router.message(TaskCreation.editing_field)
-async def save_edited_field(message: Message, state: FSMContext):
+  async def save_edited_field(message: Message, state: FSMContext):
     data = await state.get_data()
     field = data.get("editing")
     parsed = data.get("parsed", {})
@@ -1245,17 +1280,19 @@ async def cmd_done(message: Message):
         await message.answer("Укажите ID: /done 5")
         return
     task_id = int(parts[1])
+    tasks_before = get_tasks()
+    task_before = next((t for t in tasks_before if t["id"] == task_id), None)
+    if not task_before:
+        await message.answer(f"❌ Задача #{task_id} не найдена.")
+        return
     with get_conn() as conn:
         user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
     author = user["name"] if user else (message.from_user.first_name or "Неизвестно")
-    tasks_before = get_tasks()
-    task_before = next((t for t in tasks_before if t["id"] == task_id), None)
     update_status(task_id, "Выполнена", changed_by=author)
     # Запоминаем паттерн выполненной задачи
     from agent import learn_from_task
     await learn_from_task(task_id)
-    if task_before:
-        await notify_task_completed(message.bot, task_before.get("assignee", ""), task_before["title"], task_id, completed_by=author)
+    await notify_task_completed(message.bot, task_before.get("assignee", ""), task_before["title"], task_id, completed_by=author)
     await message.answer(f"✅ Задача #{task_id} выполнена! Записано: {author}")
 
 
@@ -1366,8 +1403,6 @@ async def universal_task_creator(message: Message, state: FSMContext):
 
     # Одна задача — если всё заполнено, сохраняем сразу без подтверждения
     parsed = result
-    project = parsed.get("project", "")
-    projects = get_projects()
 
     # Сразу показываем карточку — без промежуточных вопросов
     await state.update_data(parsed=parsed)
