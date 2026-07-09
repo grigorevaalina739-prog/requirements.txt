@@ -502,6 +502,19 @@ async def dashboard(request):
         ".more-dropdown a:hover{background:#f8fafc;color:#1d4ed8;}\n"
         "@media(max-width:1050px){.page{grid-template-columns:1fr;}.sidebar{display:none;}}\n"
         "@media(max-width:680px){.hero-inner{flex-direction:column;}.scores{justify-content:center;}.content{padding:14px;}.kpi-grid{grid-template-columns:repeat(2,1fr);}.topbar{padding:0 14px;}.topbar-brand p{display:none;}.tbl-wrap table thead{display:none;}.task-row{display:block;margin:6px;border-radius:10px;border:1px solid var(--border);}.task-row td{display:flex;justify-content:space-between;align-items:center;padding:7px 11px;border-bottom:1px solid rgba(255,255,255,.04);}}\n"
+        "@media(max-width:680px){"
+        ".topbar-right{gap:6px;flex-wrap:wrap;justify-content:flex-end;}"
+        ".tb-btn{padding:8px 10px;font-size:12px;min-height:40px;display:inline-flex;align-items:center;}"
+        ".tb-btn.tb-blue{font-size:13px;}"
+        ".filters{flex-wrap:wrap;gap:8px;}"
+        ".filters select,.filters .flt{width:100%;min-height:44px;font-size:15px;}"
+        ".kpi-card{padding:12px;}"
+        ".task-row td[data-label]::before{content:attr(data-label);font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;}"
+        ".task-row td{min-height:40px;font-size:14px;}"
+        "table td a,table td button{min-height:36px;}"
+        ".hero h1,h1{font-size:20px;}"
+        "}\n"
+        "@media(max-width:420px){.kpi-grid{grid-template-columns:1fr 1fr;}.topbar h1{font-size:14px;}}\n"
         "</style>\n"
         "</head>\n<body>\n"
     )
@@ -518,11 +531,10 @@ async def dashboard(request):
         "<p>Контроль задач, сроков и исполнения</p>"
         "</div></div>\n"
         "  <div class=\"topbar-right\">"
-        "<a href=\"/agent\" class=\"tb-btn tb-ghost\">🤖 Агент</a>"
+        "<a href=\"/agent\" class=\"tb-btn tb-blue\">🤖 Агент</a>"
         "<a href=\"/calendar\" class=\"tb-btn tb-ghost\">📅 Календарь</a>"
         "<a href=\"/managers\" class=\"tb-btn tb-ghost\">👥 Сотрудники</a>"
         "<a href=\"/archive\" class=\"tb-btn tb-ghost\">📦 Архив</a>"
-        "<a href=\"/agent\" class=\"tb-btn tb-blue\">+ Задача</a>"
         "<button class=\"tb-btn tb-ghost\" onclick=\"openCmd()\" title=\"Ctrl+K\">⌘K</button>"
         "</div>\n</div>\n"
     )
@@ -2088,6 +2100,19 @@ textarea {{ height:70px; resize:vertical; }}
 .btn-primary {{ padding:10px 20px; background:#3B82F6; color:white; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }}
 .btn-cancel {{ padding:10px 20px; background:#F3F4F6; color:#374151; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }}
 @media(max-width:900px) {{ .wrap {{ grid-template-columns:1fr; }} }}
+@media(max-width:680px) {{
+  .header {{ padding:12px 16px; gap:12px; flex-wrap:wrap; }}
+  .header h1 {{ font-size:16px; }}
+  .header a {{ font-size:13px; padding:6px 10px; }}
+  .wrap {{ padding:14px; gap:14px; }}
+  .modal-box {{ padding:20px; width:100%; max-width:100vw; border-radius:16px 16px 0 0; position:fixed; bottom:0; left:0; max-height:92vh; overflow-y:auto; }}
+  .modal {{ align-items:flex-end; }}
+  input,select,textarea {{ font-size:16px; min-height:44px; }}
+  label {{ font-size:14px; }}
+  table {{ font-size:13px; }}
+  table th,table td {{ padding:8px 6px; }}
+  button {{ min-height:44px; }}
+}}
 </style>
 </head>
 <body>
