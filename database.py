@@ -31,12 +31,6 @@ def seed_bord_16_06():
         "comment": ""
     },
     {
-        "assignee": "Оспанова А.",
-        "title": "Реструктурировать операционный отдел: Операционный менеджер, Мерчендайзер, 2 супервайзера",
-        "status": "Открыта",
-        "comment": ""
-    },
-    {
         "assignee": "Мырзагали Е.",
         "title": "Разработать и утвердить процесс контроля сроков годности товаров",
         "status": "Открыта",
@@ -313,7 +307,7 @@ def predict_project(title: str) -> str:
 
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
-    to_delete = ["Аскарова", "Елемес", "Яманова"]
+    to_delete = ["Аскарова", "Елемес", "Яманова", "Оспанова"]
     with get_conn() as conn:
         for name in to_delete:
             conn.execute("DELETE FROM users WHERE name LIKE ?", (f"%{name}%",))
@@ -377,6 +371,11 @@ def init_db():
             file_type TEXT DEFAULT '',
             created_at TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS managers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            created_at TEXT DEFAULT (date('now'))
+        );
         """)
     logger.info("База данных инициализирована.")
     # Разовые операции при первом запуске
@@ -417,6 +416,10 @@ def init_db():
         fix_board_miniso_tasks()
     except Exception as e:
         print(f"fix_board error: {e}")
+    try:
+        seed_managers()
+    except Exception as e:
+        print(f"seed_managers error: {e}")
 
 
 def get_projects():
@@ -678,12 +681,6 @@ def seed_bord_16_06():
         "comment": ""
     },
     {
-        "assignee": "Оспанова А.",
-        "title": "Реструктурировать операционный отдел: Операционный менеджер, Мерчендайзер, 2 супервайзера",
-        "status": "Открыта",
-        "comment": ""
-    },
-    {
         "assignee": "Мырзагали Е.",
         "title": "Разработать и утвердить процесс контроля сроков годности товаров",
         "status": "Открыта",
@@ -934,7 +931,7 @@ def predict_project(title: str) -> str:
 
 def cleanup_users():
     """Удаляет/переименовывает пользователей при запуске."""
-    to_delete = ["Аскарова", "Елемес", "Яманова"]
+    to_delete = ["Аскарова", "Елемес", "Яманова", "Оспанова"]
     with get_conn() as conn:
         for name in to_delete:
             conn.execute("DELETE FROM users WHERE name LIKE ?", (f"%{name}%",))
@@ -998,6 +995,11 @@ def init_db():
             file_type TEXT DEFAULT '',
             created_at TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS managers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            created_at TEXT DEFAULT (date('now'))
+        );
         """)
     logger.info("База данных инициализирована.")
     # Разовые операции при первом запуске
@@ -1038,6 +1040,10 @@ def init_db():
         fix_board_miniso_tasks()
     except Exception as e:
         print(f"fix_board error: {e}")
+    try:
+        seed_managers()
+    except Exception as e:
+        print(f"seed_managers error: {e}")
 
 
 def get_projects():
@@ -1266,3 +1272,54 @@ def delete_task_comment(comment_id: int):
     with get_conn() as conn:
         conn.execute("DELETE FROM task_comments WHERE id=?", (comment_id,))
     return True
+
+
+# ─── Управление списком сотрудников (managers) ─────────────────────────────
+
+DEFAULT_MANAGERS = [
+    "Абдуллах Н.", "Камалов Н.", "Кострыкин И.", "Кульбаева Б.",
+    "Мырзағали Е.", "Луданная Л.", "Маркелова И.", "Мустафина А.",
+    "Куниязов З.",
+]
+
+
+def seed_managers():
+    """Заполняет таблицу managers начальным списком, если она пустая."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT COUNT(*) AS c FROM managers").fetchone()
+        if row["c"] == 0:
+            for name in DEFAULT_MANAGERS:
+                conn.execute("INSERT OR IGNORE INTO managers (name) VALUES (?)", (name,))
+
+
+def get_managers():
+    """Возвращает список имён сотрудников (отсортирован по имени)."""
+    with get_conn() as conn:
+        try:
+            rows = conn.execute("SELECT name FROM managers ORDER BY name").fetchall()
+            return [r["name"] for r in rows]
+        except Exception:
+            return list(DEFAULT_MANAGERS)
+
+
+def add_manager(name: str) -> bool:
+    """Добавляет сотрудника. Возвращает True если добавлен, False если уже существует или имя пустое."""
+    name = (name or "").strip()
+    if not name:
+        return False
+    with get_conn() as conn:
+        try:
+            conn.execute("INSERT INTO managers (name) VALUES (?)", (name,))
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+
+def delete_manager(name: str) -> bool:
+    """Удаляет сотрудника из списка. Возвращает True если удалён."""
+    name = (name or "").strip()
+    if not name:
+        return False
+    with get_conn() as conn:
+        cur = conn.execute("DELETE FROM managers WHERE name=?", (name,))
+        return cur.rowcount > 0
