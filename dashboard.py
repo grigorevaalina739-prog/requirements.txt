@@ -397,7 +397,7 @@ async def handle_registration(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(f"✅ Вы зарегистрированы как *{name}*!", parse_mode="Markdown")
     await _show_main_menu(callback.message, name)
     await _send_my_tasks(callback.message, name)
-  @router.message(Registration.waiting_for_name)
+@router.message(Registration.waiting_for_name)
 async def save_manual_registration(message: Message, state: FSMContext):
     name = message.text.strip()
     await state.clear()
@@ -793,7 +793,7 @@ async def quickedit_task(callback: CallbackQuery, state: FSMContext):
         parse_mode="Markdown"
     )
     await callback.answer()
-  # ─── /edit ─────────────────────────────────────────────────────────────────
+# ─── /edit ─────────────────────────────────────────────────────────────────
 @router.message(Command("edit"))
 async def cmd_edit(message: Message, state: FSMContext):
     parts = message.text.split()
@@ -1185,7 +1185,8 @@ async def edit_field(callback: CallbackQuery, state: FSMContext):
     await state.set_state(TaskCreation.editing_field)
     await callback.message.answer(f"✏️ Введите *{FIELD_LABELS.get(field, field)}*:", parse_mode="Markdown")
     await callback.answer()
-  async def save_edited_field(message: Message, state: FSMContext):
+@router.message(TaskCreation.editing_field)
+async def save_edited_field(message: Message, state: FSMContext):
     data = await state.get_data()
     field = data.get("editing")
     parsed = data.get("parsed", {})
