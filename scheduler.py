@@ -344,3 +344,24 @@ async def check_meeting_reminders(bot: Bot):
                 except Exception as e:
                     logger.error(f"Ошибка напоминания о встрече для {name}: {e}")
             mark_meeting_reminded(m["id"])
+
+
+async def notify_task_assignees(bot: Bot, assignees, title, project, deadline):
+    """Шлёт каждому ответственному персональное уведомление о новой задаче."""
+    if isinstance(assignees, str):
+        assignees = [a.strip() for a in assignees.split(",") if a.strip()]
+    for name in assignees:
+        user = _find_user_by_name(name)
+        if not user:
+            logger.info(f"Не найден пользователь для уведомления о задаче: {name}")
+            continue
+        text = (
+            f"📌 *Вам назначена задача*\n\n"
+            f"📋 *Задача:* {title}\n"
+            f"📁 *Проект:* {project or '—'}\n"
+            f"📅 *Срок:* {deadline or '—'}"
+        )
+        try:
+            await bot.send_message(user["telegram_id"], text, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Ошибка уведомления о задаче для {name}: {e}")
