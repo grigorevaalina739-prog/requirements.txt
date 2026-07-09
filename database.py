@@ -491,10 +491,26 @@ def get_stats():
 def get_overdue_tasks():
     today = datetime.now().strftime("%Y-%m-%d")
     with get_conn() as conn:
-        return [dict(r) for r in conn.execute(
-            "SELECT * FROM tasks WHERE status NOT IN ('Выполнена', 'Архив') AND deadline!='' AND deadline<? ORDER BY deadline",
+        rows = conn.execute(
+            "SELECT * FROM tasks WHERE deadline!='' AND deadline<? ORDER BY deadline",
             (today,)
-        ).fetchall()]
+        ).fetchall()
+    # Надёжно отсеиваем выполненные (учитываем пробелы/регистр/варианты слова)
+    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив", "done", "complete")
+    result = []
+    seen = set()
+    for r in rows:
+        d = dict(r)
+        status_norm = (d.get("status") or "").strip().lower()
+        if any(w in status_norm for w in done_words):
+            continue
+        # Убираем дубли одинаковых задач (один и тот же текст + ответственный)
+        key = ((d.get("title") or "").strip().lower(), (d.get("assignee") or "").strip().lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(d)
+    return result
 
 def clear_tasks_from_sheet(spreadsheet_id: str):
     """Заглушка — не используется."""
@@ -1115,10 +1131,26 @@ def get_stats():
 def get_overdue_tasks():
     today = datetime.now().strftime("%Y-%m-%d")
     with get_conn() as conn:
-        return [dict(r) for r in conn.execute(
-            "SELECT * FROM tasks WHERE status!='Выполнена' AND deadline!='' AND deadline<? ORDER BY deadline",
+        rows = conn.execute(
+            "SELECT * FROM tasks WHERE deadline!='' AND deadline<? ORDER BY deadline",
             (today,)
-        ).fetchall()]
+        ).fetchall()
+    # Надёжно отсеиваем выполненные (учитываем пробелы/регистр/варианты слова)
+    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "done", "complete")
+    result = []
+    seen = set()
+    for r in rows:
+        d = dict(r)
+        status_norm = (d.get("status") or "").strip().lower()
+        if any(w in status_norm for w in done_words):
+            continue
+        # Убираем дубли одинаковых задач (один и тот же текст + ответственный)
+        key = ((d.get("title") or "").strip().lower(), (d.get("assignee") or "").strip().lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(d)
+    return result
 
 def clear_tasks_from_sheet(spreadsheet_id: str):
     """Заглушка — не используется."""
