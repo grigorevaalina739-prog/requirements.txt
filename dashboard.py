@@ -2,7 +2,7 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web, ClientSession
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task, delete_task_comment, predict_project, learn_project_from_task, get_managers, add_manager, delete_manager
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task, delete_task_comment, predict_project, learn_project_from_task, get_managers, add_manager, delete_manager, trash_task, get_trashed_tasks, restore_from_trash, delete_task_permanently
 from datetime import datetime, date
 from config import BOT_TOKEN
 
@@ -144,6 +144,8 @@ def task_row(t, project_filter="", status_filter=""):
         '<div style="height:1px;background:#F1F5F9;margin:4px 0;"></div>'
         f'{mi("📎 Вложения", f"/attach/{tid}")}📎 Вложения</a>'
         f'{mi("🕐 История", f"/history/{tid}")}🕐 История</a>'
+        '<div style="height:1px;background:#F1F5F9;margin:4px 0;"></div>'
+        f'{mi("🗑 В корзину", f"/trash/task/{tid}?back={back_url}", color="#DC2626", onclick=f"return confirm(&#39;Переместить задачу #{tid} в корзину?&#39;)")}🗑 В корзину</a>'
         '</div></div></div>'
     )
 
@@ -555,6 +557,7 @@ async def dashboard(request):
         "<a href=\"/calendar\" class=\"tb-btn tb-ghost\">📅 Календарь</a>"
         "<a href=\"/managers\" class=\"tb-btn tb-ghost\">👥 Сотрудники</a>"
         "<a href=\"/archive\" class=\"tb-btn tb-ghost\">📦 Архив</a>"
+        "<a href=\"/trash\" class=\"tb-btn tb-ghost\">🗑 Корзина</a>"
         "<button class=\"tb-btn tb-ghost\" onclick=\"openCmd()\" title=\"Ctrl+K\">⌘K</button>"
         "</div>\n</div>\n"
     )
@@ -2348,6 +2351,102 @@ async def do_restore_task(request):
     task_id = int(request.match_info["task_id"])
     restore_task(task_id)
     raise web.HTTPFound("/archive")
+
+
+# ─── Корзина задач ─────────────────────────────────────────────────────────
+@routes.get("/trash/task/{task_id}")
+async def do_trash_task(request):
+    task_id = int(request.match_info["task_id"])
+    trash_task(task_id)
+    back = request.rel_url.query.get("back", "/")
+    raise web.HTTPFound(back)
+
+
+@routes.get("/trash/restore/{task_id}")
+async def do_restore_from_trash(request):
+    task_id = int(request.match_info["task_id"])
+    restore_from_trash(task_id)
+    raise web.HTTPFound("/trash")
+
+
+@routes.get("/trash/delete/{task_id}")
+async def do_delete_permanently(request):
+    task_id = int(request.match_info["task_id"])
+    delete_task_permanently(task_id)
+    raise web.HTTPFound("/trash")
+
+
+@routes.get("/trash")
+async def trash_page(request):
+    tasks = get_trashed_tasks()
+    rows = ""
+    if tasks:
+        for t in tasks:
+            title = t.get("title") or "Без названия"
+            proj = t.get("project") or "—"
+            who = t.get("assignee") or "—"
+            dl = t.get("deadline") or "—"
+            rows += (
+                f'<div class="trash-row">'
+                f'  <div class="trash-info">'
+                f'    <div class="trash-title">🗑 #{t["id"]} {title}</div>'
+                f'    <div class="trash-meta">📁 {proj} · 👤 {who} · 📅 {dl}</div>'
+                f'  </div>'
+                f'  <div class="trash-actions">'
+                f'    <a class="tr-btn tr-restore" href="/trash/restore/{t["id"]}">↩️ Восстановить</a>'
+                f'    <a class="tr-btn tr-edit" href="/edit/{t["id"]}">✏️ Изменить</a>'
+                f'    <a class="tr-btn tr-del" href="/trash/delete/{t["id"]}" onclick="return confirm(\'Удалить задачу #{t["id"]} НАВСЕГДА? Это действие необратимо.\')">❌ Удалить навсегда</a>'
+                f'  </div>'
+                f'</div>'
+            )
+    else:
+        rows = '<div style="text-align:center;padding:48px;color:#94A3B8;">Корзина пуста</div>'
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Корзина — MINISO</title>
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0;}}
+  body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F9FAFB;color:#111827;}}
+  .topbar{{background:#1E293B;color:white;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;}}
+  .topbar h1{{font-size:19px;font-weight:600;}}
+  .topbar a{{color:#94A3B8;text-decoration:none;font-size:14px;}}
+  .topbar a:hover{{color:white;}}
+  .wrap{{max-width:820px;margin:28px auto;padding:0 16px;}}
+  .hint{{font-size:13px;color:#64748B;margin-bottom:16px;}}
+  .trash-row{{background:white;border:1px solid #E5E7EB;border-radius:12px;padding:16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;}}
+  .trash-title{{font-size:15px;font-weight:600;color:#1E293B;margin-bottom:5px;}}
+  .trash-meta{{font-size:13px;color:#64748B;}}
+  .trash-actions{{display:flex;gap:8px;flex-wrap:wrap;}}
+  .tr-btn{{padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;min-height:40px;display:inline-flex;align-items:center;}}
+  .tr-restore{{background:#DCFCE7;color:#166534;}}
+  .tr-restore:hover{{background:#bbf7d0;}}
+  .tr-edit{{background:#EFF6FF;color:#1D4ED8;}}
+  .tr-edit:hover{{background:#dbeafe;}}
+  .tr-del{{background:#FEE2E2;color:#DC2626;}}
+  .tr-del:hover{{background:#fecaca;}}
+  @media(max-width:600px){{
+    .trash-row{{flex-direction:column;align-items:stretch;}}
+    .trash-actions{{justify-content:stretch;}}
+    .tr-btn{{flex:1;justify-content:center;}}
+  }}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🗑 Корзина</h1>
+  <a href="/">← Дашборд</a>
+</div>
+<div class="wrap">
+  <div class="hint">Удалённые задачи хранятся здесь. Их можно восстановить, отредактировать или удалить окончательно.</div>
+  {rows}
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
 
 
 @routes.get("/archive")
