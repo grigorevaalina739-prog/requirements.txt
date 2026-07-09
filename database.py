@@ -1136,7 +1136,7 @@ def get_overdue_tasks():
             (today,)
         ).fetchall()
     # Надёжно отсеиваем выполненные (учитываем пробелы/регистр/варианты слова)
-    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "done", "complete")
+    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив", "done", "complete")
     result = []
     seen = set()
     for r in rows:
