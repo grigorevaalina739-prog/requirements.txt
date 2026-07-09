@@ -181,9 +181,26 @@ async def dashboard(request):
     projects = get_projects()
     selected = request.rel_url.query.get("project", "")
     status_filter = request.rel_url.query.get("status", "")
+    kpi_filter = request.rel_url.query.get("filter", "")
     search_query = request.rel_url.query.get("q", "").strip().lower()
 
     tasks = get_tasks(project=selected or None, status=status_filter or None)
+
+    # Фильтры от KPI-плиток
+    if kpi_filter == "active":
+        tasks = [t for t in tasks if t.get("status") in ("Открыта", "В работе", "На согласовании")]
+    elif kpi_filter == "overdue":
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив")
+        tasks = [
+            t for t in tasks
+            if (t.get("deadline") or "") and (t.get("deadline") or "") < today_str
+            and not any(w in (t.get("status") or "").strip().lower() for w in done_words)
+        ]
+    elif kpi_filter == "today":
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        tasks = [t for t in tasks if (t.get("deadline") or "") == today_str]
+
     if search_query:
         tasks = [t for t in tasks if
             search_query in str(t.get("id","")) or
@@ -420,6 +437,9 @@ async def dashboard(request):
         ".sidebar{padding:22px 16px 22px 0;border-left:1px solid var(--border);}\n"
         ".kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px;}\n"
         ".kpi{background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.7);border-radius:14px;padding:16px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s;cursor:default;}\n"
+        ".kpi-link{cursor:pointer;text-decoration:none;display:block;color:inherit;}\n"
+        ".kpi-link:hover{transform:translateY(-3px);border-color:rgba(59,130,246,.5);box-shadow:0 8px 20px rgba(0,0,0,.10);}\n"
+        ".kpi-link:active{transform:translateY(-1px);}\n"
         ".kpi:hover{transform:translateY(-3px);border-color:#93c5fd;box-shadow:0 8px 24px rgba(79,126,247,.12);}\n"
         ".kpi-top{position:absolute;top:0;left:0;right:0;height:2px;}\n"
         ".kpi-icon{font-size:18px;margin-bottom:8px;}\n"
@@ -571,18 +591,22 @@ async def dashboard(request):
     # page layout
     html += "<div class=\"page\">\n<div class=\"content\">\n"
 
-    # kpi
+    # kpi (каждая плитка ведёт на отфильтрованный список задач)
     kpi_items = [
-        ("linear-gradient(90deg,#3b82f6,#6366f1)", "📋", str(total_all), "#1a0505", "Всего задач", "Все проекты"),
-        ("linear-gradient(90deg,#f59e0b,#f97316)", "⚡", str(open_all), "#f59e0b", "В работе", "Активных"),
-        ("linear-gradient(90deg,#10b981,#06b6d4)", "✅", str(done_all), "#10b981", "Выполнено", f"{pct_all}% прогресс"),
-        ("linear-gradient(90deg,#ef4444,#dc2626)", "🔴", str(over_all), "#ef4444", "Просрочено", "Всё ок" if over_all==0 else "Внимание!"),
-        ("linear-gradient(90deg,#8b5cf6,#a78bfa)", "📅", str(today_dl), "#8b5cf6", "Дедлайн сегодня", "Нет срочных" if today_dl==0 else "Срочно!"),
-        ("linear-gradient(90deg,#06b6d4,#3b82f6)", "💎", f"{health}%", "#06b6d4", "Health Score", health_label),
+        ("linear-gradient(90deg,#3b82f6,#6366f1)", "📋", str(total_all), "#1a0505", "Всего задач", "Все проекты", "/"),
+        ("linear-gradient(90deg,#f59e0b,#f97316)", "⚡", str(open_all), "#f59e0b", "В работе", "Активных", "/?filter=active"),
+        ("linear-gradient(90deg,#10b981,#06b6d4)", "✅", str(done_all), "#10b981", "Выполнено", f"{pct_all}% прогресс", "/?status=Выполнена"),
+        ("linear-gradient(90deg,#ef4444,#dc2626)", "🔴", str(over_all), "#ef4444", "Просрочено", "Всё ок" if over_all==0 else "Внимание!", "/?filter=overdue"),
+        ("linear-gradient(90deg,#8b5cf6,#a78bfa)", "📅", str(today_dl), "#8b5cf6", "Дедлайн сегодня", "Нет срочных" if today_dl==0 else "Срочно!", "/?filter=today"),
+        ("linear-gradient(90deg,#06b6d4,#3b82f6)", "💎", f"{health}%", "#06b6d4", "Health Score", health_label, ""),
     ]
     html += "<div class=\"kpi-grid\">\n"
-    for grad, icon, num, color, label, sub in kpi_items:
-        html += f"  <div class=\"kpi\"><div class=\"kpi-top\" style=\"background:{grad};\"></div><div class=\"kpi-icon\">{icon}</div><div class=\"kpi-num\" style=\"color:{color};\">{num}</div><div class=\"kpi-label\">{label}</div><div class=\"kpi-sub\">{sub}</div></div>\n"
+    for grad, icon, num, color, label, sub, link in kpi_items:
+        inner = f"<div class=\"kpi-top\" style=\"background:{grad};\"></div><div class=\"kpi-icon\">{icon}</div><div class=\"kpi-num\" style=\"color:{color};\">{num}</div><div class=\"kpi-label\">{label}</div><div class=\"kpi-sub\">{sub}</div>"
+        if link:
+            html += f"  <a class=\"kpi kpi-link\" href=\"{link}\">{inner}</a>\n"
+        else:
+            html += f"  <div class=\"kpi\">{inner}</div>\n"
     html += "</div>\n"
 
     # progress
