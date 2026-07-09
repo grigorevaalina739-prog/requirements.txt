@@ -1078,6 +1078,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ep-row input,.ep-row select,.ep-row textarea{width:100%;padding:8px 11px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;font-family:inherit;outline:none;transition:border .15s;}
 .ep-row input:focus,.ep-row select:focus,.ep-row textarea:focus{border-color:#e83232;}
 .ep-row textarea{height:60px;resize:vertical;}
+.ep-assignees{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:8px;border:1.5px solid #e2e8f0;border-radius:7px;max-height:180px;overflow-y:auto;}
+.ep-assignees .ep-chk{display:flex;align-items:center;gap:6px;margin:0;padding:4px 6px;font-size:12px;font-weight:500;color:#334155;text-transform:none;letter-spacing:0;border-radius:5px;cursor:pointer;}
+.ep-assignees .ep-chk:hover{background:#f1f5f9;}
+.ep-assignees .ep-chk input{width:auto;padding:0;margin:0;cursor:pointer;}
 .ep-save{width:100%;padding:9px;background:#e83232;color:white;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;}
 
 /* Multi-task */
@@ -1257,10 +1261,10 @@ function renderCard(task, idx=''){
     </div>
     <div class="edit-panel" id="edit${idx}">
       <div class="ep-row"><label>Название задачи</label><textarea id="et_title${idx}">${task.title||''}</textarea></div>
-      <div class="ep-row"><label>Ответственный</label>
-        <select id="et_assignee${idx}"><option value="">— Выберите —</option>
-        ${MANAGERS.map(m=>`<option value="${m}"${m===task.assignee?' selected':''}>${m}</option>`).join('')}
-        </select></div>
+      <div class="ep-row"><label>Ответственные (можно несколько)</label>
+        <div class="ep-assignees" id="et_assignee${idx}">
+        ${MANAGERS.map(m=>{const sel=(task.assignee||'').split(',').map(x=>x.trim()).includes(m);return `<label class="ep-chk"><input type="checkbox" value="${m}"${sel?' checked':''}> ${m}</label>`}).join('')}
+        </div></div>
       <div class="ep-row"><label>Проект</label>
         <select id="et_project${idx}"><option value="">— Выберите —</option>
         ${PROJECTS.map(p=>`<option value="${p}"${p===task.project?' selected':''}>${p}</option>`).join('')}
@@ -1283,7 +1287,8 @@ function cancelCard(id){
 function saveEdit(idx){
   if(!pendingTask) return;
   pendingTask.title = document.getElementById('et_title'+idx).value;
-  pendingTask.assignee = document.getElementById('et_assignee'+idx).value;
+  const boxes = document.querySelectorAll('#et_assignee'+idx+' input[type=checkbox]:checked');
+  pendingTask.assignee = Array.from(boxes).map(b=>b.value).join(', ');
   pendingTask.project = document.getElementById('et_project'+idx).value;
   pendingTask.deadline = document.getElementById('et_deadline'+idx).value;
   pendingTask._project_predicted = false;
@@ -1459,15 +1464,27 @@ async def agent_create_v2(request):
     data = await request.json()
     title = data.get("title", "Без названия")
     project = data.get("project", "Общие")
+    assignee = data.get("assignee", "")
+    deadline = data.get("deadline", "")
     task_id = add_task(
         project=project,
-        assignee=data.get("assignee", ""),
+        assignee=assignee,
         department=data.get("department", ""),
         title=title,
-        deadline=data.get("deadline", ""),
+        deadline=deadline,
         comment=data.get("description", ""),
     )
     learn_project_from_task(title, project)
+    # Уведомляем каждого ответственного лично (если бот доступен)
+    bot = request.app.get("bot")
+    assignees = [a.strip() for a in assignee.split(",") if a.strip()]
+    if bot is not None and assignees:
+        try:
+            from scheduler import notify_task_assignees
+            await notify_task_assignees(bot, assignees, title, project, deadline)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Ошибка уведомления о задаче (агент): {e}")
     return web.json_response({"task_id": task_id, "ok": True})
 
 
