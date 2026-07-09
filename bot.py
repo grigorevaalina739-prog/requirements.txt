@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiohttp import web
 from config import BOT_TOKEN
 from handlers import router
-from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, morning_briefing
+from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, morning_briefing, check_meeting_reminders
 from database import init_db
 from dashboard import create_app
 
@@ -41,10 +41,14 @@ async def main():
     # Еженедельный дайджест каждому сотруднику — каждый понедельник в 9:00
     scheduler.add_job(weekly_digest, trigger="cron", day_of_week="mon", hour=9, minute=0, args=[bot])
 
+    # Напоминание о встречах за 15 минут — проверка каждую минуту
+    scheduler.add_job(check_meeting_reminders, trigger="interval", minutes=1, args=[bot])
+
     scheduler.start()
 
     # Веб-дашборд
     app = create_app()
+    app["bot"] = bot  # чтобы дашборд мог слать уведомления о встречах
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", 8080)
@@ -56,5 +60,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
