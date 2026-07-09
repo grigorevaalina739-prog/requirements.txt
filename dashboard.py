@@ -736,11 +736,7 @@ async def dashboard(request):
         f"{upcoming_html}</div>\n"
         "<div class=\"sb-sec\"><div class=\"sb-title\">Нагрузка команды</div>\n"
         f"{workload_html}</div>\n"
-        "<div class=\"sb-sec\"><div class=\"sb-title\">Быстрые действия</div>\n"
-        "<a href=\"/calendar\" class=\"qa-btn\">📅 Календарь</a>\n"
-        "<a href=\"/?status=Просрочена\" class=\"qa-btn\">🔴 Просроченные</a>\n"
-        "<a href=\"/?status=Открыта\" class=\"qa-btn\">🔵 Открытые</a>\n"
-        "</div>\n</div>\n"
+        "</div>\n"
     )
 
     html += "</div>\n"  # /page
