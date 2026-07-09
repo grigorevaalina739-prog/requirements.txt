@@ -7,12 +7,12 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from agent import parse_task_with_ai, parse_deadline
+from agent import parse_task_with_ai, parse_deadline, analyze_project_tasks
 from database import (add_task, get_tasks, update_status, get_projects,
                       add_project, get_overdue_tasks, get_stats,
                       register_user, get_user_by_name, get_conn,
                       add_task_comment, get_task_comments,
-                      get_task_history, log_task_change)
+                      get_task_history, log_task_change, get_managers)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -34,10 +34,6 @@ class ProjectAdding(StatesGroup):
     waiting_for_name = State()
 
 
-class Registration(StatesGroup):
-    waiting_for_name = State()
-
-
 class TaskEditing(StatesGroup):
     choosing_field = State()
     editing_field = State()
@@ -56,28 +52,17 @@ FIELD_LABELS = {
     "project": "Проект",
     "deadline": "Срок",
     "comment": "Комментарий",
-    "status": "Статус",
 }
 
-# Список руководителей для быстрого выбора
-MANAGERS = [
-    "Абдуллах Н.",
-    "Камалов Н.",
-    "Кострыкин И.",
-    "Аскарова М.",
-    "Кульбаева Б.",
-    "Мырзағали Е.",
-    "Луданная Л.",
-    "Маркелова И.",
-    "Мустафина А.",
-    "Куниязов З.",
-]
+# Список руководителей теперь хранится в БД (таблица managers).
+# Изменения через веб-дашборд /managers сразу отражаются в боте.
+
 
 def managers_keyboard():
     """Клавиатура выбора ответственного из списка руководителей."""
     buttons = []
     row = []
-    for i, name in enumerate(MANAGERS):
+    for i, name in enumerate(get_managers()):
         row.append(InlineKeyboardButton(text=name, callback_data=f"mgr_{i}"))
         if len(row) == 2:
             buttons.append(row)
@@ -287,7 +272,7 @@ async def cmd_start(message: Message, state: FSMContext):
     else:
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=name, callback_data=f"reg_{i}")]
-            for i, name in enumerate(MANAGERS)
+            for i, name in enumerate(get_managers())
         ] + [[InlineKeyboardButton(text="✏️ Ввести своё имя", callback_data="reg_manual")]])
         await message.answer(
             "👋 Добро пожаловать!\n\nВыберите своё имя из списка чтобы зарегистрироваться:",
@@ -344,7 +329,7 @@ async def handle_registration(callback: CallbackQuery, state: FSMContext):
         return
     try:
         idx = int(choice)
-        name = MANAGERS[idx]
+        name = get_managers()[idx]
     except (ValueError, IndexError):
         name = choice
     register_user(callback.from_user.id, name)
@@ -1337,7 +1322,7 @@ async def choose_manager(callback: CallbackQuery, state: FSMContext):
         return
 
     idx = int(callback.data.replace("mgr_", ""))
-    assignee = MANAGERS[idx]
+    assignee = get_managers()[idx]
     parsed["assignee"] = assignee
     editing = data.get("editing")
     await state.update_data(parsed=parsed, editing=None)
@@ -1395,7 +1380,7 @@ async def choose_manager(callback: CallbackQuery, state: FSMContext):
 @router.message(Command("assignees"))
 async def cmd_assignees(message: Message):
     lines = ["👥 *Список руководителей:*\n"]
-    for i, name in enumerate(MANAGERS, 1):
+    for i, name in enumerate(get_managers(), 1):
         lines.append(f"{i}. {name}")
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
@@ -1405,7 +1390,7 @@ async def cmd_assignees(message: Message):
 async def cmd_delete_user(message: Message):
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2:
-        await message.answer("Укажите имя: /deleteuser Аскарова")
+        await message.answer("Укажите имя: /deleteuser Фамилия")
         return
     name = parts[1].strip()
     with get_conn() as conn:
