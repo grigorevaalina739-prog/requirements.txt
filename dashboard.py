@@ -2130,15 +2130,31 @@ document.getElementById('addModal').addEventListener('click', function(e) {{
 async def calendar_add(request):
     back = request.rel_url.query.get("back", "/calendar")
     data = await request.post()
+    title = data.get("title","").strip()
+    project = data.get("project","")
+    date = data.get("date","")
+    time_start = data.get("time_start","")
+    time_end = data.get("time_end","")
+    participants = data.get("participants","")
+    description = data.get("description","")
     add_meeting(
-        title=data.get("title","").strip(),
-        project=data.get("project",""),
-        date=data.get("date",""),
-        time_start=data.get("time_start",""),
-        time_end=data.get("time_end",""),
-        participants=data.get("participants",""),
-        description=data.get("description","")
+        title=title, project=project, date=date,
+        time_start=time_start, time_end=time_end,
+        participants=participants, description=description
     )
+    # Уведомляем участников о создании встречи (если бот доступен)
+    bot = request.app.get("bot")
+    if bot is not None:
+        try:
+            from scheduler import notify_meeting_participants
+            await notify_meeting_participants(bot, {
+                "title": title, "project": project, "date": date,
+                "time_start": time_start, "time_end": time_end,
+                "participants": participants, "description": description,
+            })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Ошибка уведомления о встрече: {e}")
     raise web.HTTPFound(back)
 
 
