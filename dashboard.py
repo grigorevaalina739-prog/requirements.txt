@@ -760,6 +760,10 @@ async def newtask_page(request):
     project_options = "".join(f'<option value="{p["name"]}">{p["name"]}</option>' for p in projects)
     managers = get_managers()
     manager_options = "".join(f'<option value="{m}">{m}</option>' for m in managers)
+    assignee_checkboxes = "".join(
+        f'<label class="chk"><input type="checkbox" name="assignee" value="{m}"> {m}</label>'
+        for m in managers
+    )
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -777,6 +781,10 @@ label{{display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:
 input,select,textarea{{width:100%;padding:10px 14px;border:1px solid rgba(255,255,255,.1);border-radius:10px;font-size:14px;font-family:inherit;background:rgba(255,255,255,.06);color:#f1f5f9;outline:none;transition:all .15s;}}
 input:focus,select:focus,textarea:focus{{border-color:rgba(59,130,246,.5);background:rgba(59,130,246,.06);}}
 select option{{background:#1e293b;}}
+.assignee-box{{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:12px;border:1px solid rgba(255,255,255,.1);border-radius:10px;background:rgba(255,255,255,.06);}}
+.assignee-box .chk{{display:flex;align-items:center;gap:8px;margin:0;padding:6px 8px;font-size:13px;font-weight:500;color:#e8edf5;text-transform:none;letter-spacing:0;border-radius:8px;cursor:pointer;transition:background .15s;}}
+.assignee-box .chk:hover{{background:rgba(59,130,246,.12);}}
+.assignee-box .chk input{{width:auto;margin:0;cursor:pointer;}}
 textarea{{height:80px;resize:vertical;}}
 .btns{{display:flex;gap:10px;margin-top:24px;}}
 .btn-save{{padding:11px 24px;background:#3b82f6;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;}}
@@ -794,8 +802,8 @@ textarea{{height:80px;resize:vertical;}}
   <form method="post" action="/newtask">
     <label>Название задачи *</label>
     <input type="text" name="title" required placeholder="Что нужно сделать?">
-    <label>Ответственный</label>
-    <select name="assignee"><option value="">— Выберите —</option>{manager_options}</select>
+    <label>Ответственные (можно выбрать несколько)</label>
+    <div class="assignee-box">{assignee_checkboxes}</div>
     <label>Проект</label>
     <select name="project"><option value="Общие">Общие</option>{project_options}</select>
     <label>Срок</label>
@@ -821,14 +829,28 @@ async def newtask_save(request):
     title = data.get("title","").strip()
     if not title:
         raise web.HTTPFound("/newtask")
+    # Несколько ответственных: чекбоксы приходят как список значений name="assignee"
+    assignees = [a.strip() for a in data.getall("assignee", []) if a.strip()]
+    assignee_str = ", ".join(assignees)
+    project = data.get("project","Общие")
+    deadline = data.get("deadline","")
     add_task(
-        project=data.get("project","Общие"),
-        assignee=data.get("assignee",""),
+        project=project,
+        assignee=assignee_str,
         department=data.get("department",""),
         title=title,
-        deadline=data.get("deadline",""),
+        deadline=deadline,
         comment=data.get("comment",""),
     )
+    # Уведомляем каждого ответственного лично (если бот доступен)
+    bot = request.app.get("bot")
+    if bot is not None and assignees:
+        try:
+            from scheduler import notify_task_assignees
+            await notify_task_assignees(bot, assignees, title, project, deadline)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Ошибка уведомления о задаче: {e}")
     raise web.HTTPFound("/")
 
 
