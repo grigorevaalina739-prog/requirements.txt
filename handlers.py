@@ -7,7 +7,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from agent import parse_task_with_ai, parse_deadline, analyze_project_tasks
+from agent import parse_task_with_ai, parse_deadline
 from database import (add_task, get_tasks, update_status, get_projects,
                       add_project, get_overdue_tasks, get_stats,
                       register_user, get_user_by_name, get_conn,
@@ -34,6 +34,10 @@ class ProjectAdding(StatesGroup):
     waiting_for_name = State()
 
 
+class Registration(StatesGroup):
+    waiting_for_name = State()
+
+
 class TaskEditing(StatesGroup):
     choosing_field = State()
     editing_field = State()
@@ -52,6 +56,7 @@ FIELD_LABELS = {
     "project": "Проект",
     "deadline": "Срок",
     "comment": "Комментарий",
+    "status": "Статус",
 }
 
 # Список руководителей для быстрого выбора
