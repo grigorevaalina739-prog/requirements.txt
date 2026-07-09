@@ -54,6 +54,82 @@ FIELD_LABELS = {
     "comment": "Комментарий",
 }
 
+
+def format_overdue_grouped(tasks):
+    """Читаемый список просроченных задач для руководителя.
+
+    Формат каждой задачи:
+        🔴 #ID Название задачи
+        📁 Проект
+        👤 Ответственный
+        📅 Дедлайн (просрочено N дн.)
+    Задачи разделены горизонтальной линией.
+    """
+    if not tasks:
+        return ["✅ Просроченных задач нет!"]
+
+    today = datetime.now()
+    sep = "━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Сортируем по давности просрочки: сначала самые старые
+    def overdue_days(t):
+        dl = t.get("deadline") or ""
+        try:
+            return (today - datetime.strptime(dl, "%Y-%m-%d")).days
+        except ValueError:
+            return -1
+
+    tasks_sorted = sorted(tasks, key=overdue_days, reverse=True)
+
+    lines = [f"⚠️ *ПРОСРОЧЕННЫЕ ЗАДАЧИ — {len(tasks)}*", sep]
+    for t in tasks_sorted:
+        title = t.get("title") or "Без названия"
+        proj = t.get("project") or "Без проекта"
+        who = t.get("assignee") or "—"
+        dl = t.get("deadline") or "—"
+
+        days = overdue_days(t)
+        if days > 0:
+            overdue_note = f" _(просрочено {days} {_days_word(days)})_"
+        else:
+            overdue_note = ""
+
+        lines.append(f"🔴 *#{t['id']} {title}*")
+        lines.append(f"📁 {proj}")
+        lines.append(f"👤 {who}")
+        lines.append(f"📅 {dl}{overdue_note}")
+        lines.append(sep)
+
+    return lines
+
+
+def _days_word(n):
+    """Склонение слова «день» для числа."""
+    n = abs(n) % 100
+    if 11 <= n <= 14:
+        return "дн."
+    last = n % 10
+    if last == 1:
+        return "день"
+    if 2 <= last <= 4:
+        return "дня"
+    return "дн."
+
+
+async def _send_long(target, lines, header_kept=True):
+    """Отправляет длинный список, разбивая на части ~3500 символов (лимит Telegram 4096)."""
+    chunk = []
+    size = 0
+    for line in lines:
+        if size + len(line) > 3500 and chunk:
+            await target.answer("\n".join(chunk), parse_mode="Markdown")
+            chunk = []
+            size = 0
+        chunk.append(line)
+        size += len(line) + 1
+    if chunk:
+        await target.answer("\n".join(chunk), parse_mode="Markdown")
+
 # Список руководителей теперь хранится в БД (таблица managers).
 # Изменения через веб-дашборд /managers сразу отражаются в боте.
 
@@ -391,10 +467,8 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
         if not tasks:
             await callback.message.answer("✅ Просроченных задач нет!")
             return
-        lines = ["⚠️ *Просроченные задачи:*\n"]
-        for t in tasks[:10]:
-            lines.append(f"🔴 *#{t['id']}* {t['title'][:50]}\n   👤 {t.get('assignee') or '—'} | 📅 {t.get('deadline')}")
-        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+        lines = format_overdue_grouped(tasks)
+        await _send_long(callback.message, lines)
     elif action == "attach":
         projects = get_projects()
         if not projects:
@@ -1197,10 +1271,8 @@ async def cmd_overdue(message: Message):
     if not tasks:
         await message.answer("🎉 Просроченных задач нет!")
         return
-    lines = ["⚠️ *Просроченные задачи:*\n"]
-    for t in tasks:
-        lines.append(f"🔴 [{t['id']}] *{t['title']}*\n   📁 {t['project']} | 👤 {t['assignee'] or '—'} | 📅 {t['deadline']}")
-    await message.answer("\n".join(lines), parse_mode="Markdown")
+    lines = format_overdue_grouped(tasks)
+    await _send_long(message, lines)
 
 
 # ─── /projects ─────────────────────────────────────────────────────────────
