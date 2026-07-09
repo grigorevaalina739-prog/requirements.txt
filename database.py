@@ -359,6 +359,7 @@ def init_db():
             time_end TEXT DEFAULT '',
             participants TEXT DEFAULT '',
             description TEXT DEFAULT '',
+            reminded INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS task_comments (
@@ -420,6 +421,14 @@ def init_db():
         seed_managers()
     except Exception as e:
         print(f"seed_managers error: {e}")
+    # Миграция: поле reminded в meetings (для баз, созданных до этого поля)
+    try:
+        with get_conn() as conn:
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(meetings)").fetchall()]
+            if "reminded" not in cols:
+                conn.execute("ALTER TABLE meetings ADD COLUMN reminded INTEGER DEFAULT 0")
+    except Exception as e:
+        print(f"migrate meetings.reminded error: {e}")
 
 
 def get_projects():
@@ -627,6 +636,32 @@ def update_meeting(meeting_id, title, project, date, time_start, time_end, parti
             "UPDATE meetings SET title=?, project=?, date=?, time_start=?, time_end=?, participants=?, description=? WHERE id=?",
             (title, project, date, time_start, time_end, participants, description, meeting_id)
         )
+    return True
+
+
+def get_meeting(meeting_id):
+    """Возвращает одну встречу по id."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM meetings WHERE id=?", (meeting_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_upcoming_meetings():
+    """Встречи, которые ещё не начались и по которым не отправлено напоминание за 15 мин."""
+    with get_conn() as conn:
+        try:
+            rows = conn.execute(
+                "SELECT * FROM meetings WHERE COALESCE(reminded,0)=0 AND time_start!='' ORDER BY date, time_start"
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
+
+
+def mark_meeting_reminded(meeting_id):
+    """Отмечает, что напоминание за 15 минут по встрече уже отправлено."""
+    with get_conn() as conn:
+        conn.execute("UPDATE meetings SET reminded=1 WHERE id=?", (meeting_id,))
     return True
 
 
@@ -999,6 +1034,7 @@ def init_db():
             time_end TEXT DEFAULT '',
             participants TEXT DEFAULT '',
             description TEXT DEFAULT '',
+            reminded INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
         );
         CREATE TABLE IF NOT EXISTS task_comments (
@@ -1060,6 +1096,14 @@ def init_db():
         seed_managers()
     except Exception as e:
         print(f"seed_managers error: {e}")
+    # Миграция: поле reminded в meetings (для баз, созданных до этого поля)
+    try:
+        with get_conn() as conn:
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(meetings)").fetchall()]
+            if "reminded" not in cols:
+                conn.execute("ALTER TABLE meetings ADD COLUMN reminded INTEGER DEFAULT 0")
+    except Exception as e:
+        print(f"migrate meetings.reminded error: {e}")
 
 
 def get_projects():
@@ -1267,6 +1311,32 @@ def update_meeting(meeting_id, title, project, date, time_start, time_end, parti
             "UPDATE meetings SET title=?, project=?, date=?, time_start=?, time_end=?, participants=?, description=? WHERE id=?",
             (title, project, date, time_start, time_end, participants, description, meeting_id)
         )
+    return True
+
+
+def get_meeting(meeting_id):
+    """Возвращает одну встречу по id."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM meetings WHERE id=?", (meeting_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def get_upcoming_meetings():
+    """Встречи, которые ещё не начались и по которым не отправлено напоминание за 15 мин."""
+    with get_conn() as conn:
+        try:
+            rows = conn.execute(
+                "SELECT * FROM meetings WHERE COALESCE(reminded,0)=0 AND time_start!='' ORDER BY date, time_start"
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []
+
+
+def mark_meeting_reminded(meeting_id):
+    """Отмечает, что напоминание за 15 минут по встрече уже отправлено."""
+    with get_conn() as conn:
+        conn.execute("UPDATE meetings SET reminded=1 WHERE id=?", (meeting_id,))
     return True
 
 
