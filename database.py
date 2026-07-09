@@ -456,7 +456,7 @@ def add_task(project, assignee, department, title, deadline, comment="", status=
         return cur.lastrowid
 
 def get_tasks(project=None, status=None):
-    query = "SELECT * FROM tasks WHERE status != 'Архив'"
+    query = "SELECT * FROM tasks WHERE status NOT IN ('Архив','Корзина')"
     params = []
     if project:
         query += " AND project = ?"
@@ -505,7 +505,7 @@ def get_overdue_tasks():
             (today,)
         ).fetchall()
     # Надёжно отсеиваем выполненные (учитываем пробелы/регистр/варианты слова)
-    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив", "done", "complete")
+    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив", "корзин", "done", "complete")
     result = []
     seen = set()
     for r in rows:
@@ -691,6 +691,42 @@ def restore_task(task_id: int):
     """Восстанавливает задачу из архива."""
     with get_conn() as conn:
         conn.execute("UPDATE tasks SET status='Выполнена' WHERE id=?", (task_id,))
+    return True
+
+
+def trash_task(task_id: int):
+    """Перемещает задачу в корзину (не удаляет физически)."""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET status='Корзина' WHERE id=?", (task_id,))
+    return True
+
+
+def get_trashed_tasks(project=None):
+    """Возвращает задачи из корзины."""
+    with get_conn() as conn:
+        if project:
+            rows = conn.execute(
+                "SELECT * FROM tasks WHERE status='Корзина' AND project=? ORDER BY id DESC",
+                (project,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM tasks WHERE status='Корзина' ORDER BY id DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def restore_from_trash(task_id: int):
+    """Восстанавливает задачу из корзины в статус 'Открыта'."""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET status='Открыта' WHERE id=?", (task_id,))
+    return True
+
+
+def delete_task_permanently(task_id: int):
+    """Окончательно удаляет задачу (только из корзины)."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM tasks WHERE id=? AND status='Корзина'", (task_id,))
     return True
 
 
@@ -1131,7 +1167,7 @@ def add_task(project, assignee, department, title, deadline, comment="", status=
         return cur.lastrowid
 
 def get_tasks(project=None, status=None):
-    query = "SELECT * FROM tasks WHERE status != 'Архив'"
+    query = "SELECT * FROM tasks WHERE status NOT IN ('Архив','Корзина')"
     params = []
     if project:
         query += " AND project = ?"
@@ -1180,7 +1216,7 @@ def get_overdue_tasks():
             (today,)
         ).fetchall()
     # Надёжно отсеиваем выполненные (учитываем пробелы/регистр/варианты слова)
-    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив", "done", "complete")
+    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив", "корзин", "done", "complete")
     result = []
     seen = set()
     for r in rows:
@@ -1366,6 +1402,42 @@ def restore_task(task_id: int):
     """Восстанавливает задачу из архива."""
     with get_conn() as conn:
         conn.execute("UPDATE tasks SET status='Выполнена' WHERE id=?", (task_id,))
+    return True
+
+
+def trash_task(task_id: int):
+    """Перемещает задачу в корзину (не удаляет физически)."""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET status='Корзина' WHERE id=?", (task_id,))
+    return True
+
+
+def get_trashed_tasks(project=None):
+    """Возвращает задачи из корзины."""
+    with get_conn() as conn:
+        if project:
+            rows = conn.execute(
+                "SELECT * FROM tasks WHERE status='Корзина' AND project=? ORDER BY id DESC",
+                (project,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM tasks WHERE status='Корзина' ORDER BY id DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def restore_from_trash(task_id: int):
+    """Восстанавливает задачу из корзины в статус 'Открыта'."""
+    with get_conn() as conn:
+        conn.execute("UPDATE tasks SET status='Открыта' WHERE id=?", (task_id,))
+    return True
+
+
+def delete_task_permanently(task_id: int):
+    """Окончательно удаляет задачу (только из корзины)."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM tasks WHERE id=? AND status='Корзина'", (task_id,))
     return True
 
 
