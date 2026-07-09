@@ -522,7 +522,7 @@ async def dashboard(request):
         "<a href=\"/calendar\" class=\"tb-btn tb-ghost\">📅 Календарь</a>"
         "<a href=\"/managers\" class=\"tb-btn tb-ghost\">👥 Сотрудники</a>"
         "<a href=\"/archive\" class=\"tb-btn tb-ghost\">📦 Архив</a>"
-        "<a href=\"/newtask\" class=\"tb-btn tb-blue\">+ Задача</a>"
+        "<a href=\"/agent\" class=\"tb-btn tb-blue\">+ Задача</a>"
         "<button class=\"tb-btn tb-ghost\" onclick=\"openCmd()\" title=\"Ctrl+K\">⌘K</button>"
         "</div>\n</div>\n"
     )
@@ -698,7 +698,7 @@ async def dashboard(request):
         "<div class=\"sb-sec\"><div class=\"sb-title\">Нагрузка команды</div>\n"
         f"{workload_html}</div>\n"
         "<div class=\"sb-sec\"><div class=\"sb-title\">Быстрые действия</div>\n"
-        "<a href=\"/newtask\" class=\"qa-btn\">➕ Создать задачу</a>\n"
+        "<a href=\"/agent\" class=\"qa-btn\">🤖 Создать задачу</a>\n"
         "<a href=\"/calendar\" class=\"qa-btn\">📅 Календарь</a>\n"
         "<a href=\"/?status=Просрочена\" class=\"qa-btn\">🔴 Просроченные</a>\n"
         "<a href=\"/?status=Открыта\" class=\"qa-btn\">🔵 Открытые</a>\n"
@@ -714,7 +714,7 @@ async def dashboard(request):
         "    <input class=\"cmd-inp\" id=\"cmdIn\" placeholder=\"Поиск задач, действий...\" oninput=\"filterCmd(this.value)\" autocomplete=\"off\">\n"
         "    <div class=\"cmd-items\" id=\"cmdIt\">\n"
         "      <div class=\"cmd-item\" onclick=\"location='/'\" >📋 Все задачи</div>\n"
-        "      <div class=\"cmd-item\" onclick=\"location='/newtask'\" >➕ Создать задачу</div>\n"
+        "      <div class=\"cmd-item\" onclick=\"location='/agent'\" >🤖 Создать задачу</div>\n"
         "      <div class=\"cmd-item\" onclick=\"location='/calendar'\" >📅 Открыть календарь</div>\n"
         "      <div class=\"cmd-item\" onclick=\"location='/?status=Просрочена'\" >🔴 Просроченные задачи</div>\n"
         "      <div class=\"cmd-item\" onclick=\"location='/?status=Открыта'\" >🔵 Открытые задачи</div>\n"
@@ -756,6 +756,11 @@ async def reopen_task(request):
 # ─── Страница создания задачи ───────────────────────────────────────────────
 @routes.get("/newtask")
 async def newtask_page(request):
+    # Постановка задач только через агента — старая форма отключена.
+    raise web.HTTPFound("/agent")
+
+
+async def _newtask_page_disabled(request):
     projects = get_projects()
     project_options = "".join(f'<option value="{p["name"]}">{p["name"]}</option>' for p in projects)
     managers = get_managers()
@@ -825,6 +830,11 @@ textarea{{height:80px;resize:vertical;}}
 
 @routes.post("/newtask")
 async def newtask_save(request):
+    # Постановка задач только через агента — приём старой формы отключён.
+    raise web.HTTPFound("/agent")
+
+
+async def _newtask_save_disabled(request):
     data = await request.post()
     title = data.get("title","").strip()
     if not title:
