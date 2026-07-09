@@ -12,7 +12,8 @@ from database import (add_task, get_tasks, update_status, get_projects,
                       add_project, get_overdue_tasks, get_stats,
                       register_user, get_user_by_name, get_conn,
                       add_task_comment, get_task_comments,
-                      get_task_history, log_task_change, get_managers)
+                      get_task_history, log_task_change, get_managers,
+                      trash_task, get_trashed_tasks, restore_from_trash)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -828,10 +829,9 @@ async def etask_choose_field(callback: CallbackQuery, state: FSMContext):
     task_id = parts[2]
 
     if field == "delete":
-        with get_conn() as conn:
-            conn.execute("DELETE FROM tasks WHERE id=?", (int(task_id),))
+        trash_task(int(task_id))
         await state.clear()
-        await callback.message.edit_text(f"🗑 Задача #{task_id} удалена!")
+        await callback.message.edit_text(f"🗑 Задача #{task_id} перемещена в корзину.\nВосстановить: /trash")
         await callback.answer()
         return
 
@@ -958,7 +958,7 @@ async def cmd_comment(message: Message, state: FSMContext):
     )
 
 
-# ─── /delete ───────────────────────────────────────────────────────────────
+# ─── /delete — переместить в корзину ─────────────────────────────────────────
 @router.message(Command("delete"))
 async def cmd_delete(message: Message):
     parts = message.text.split()
@@ -967,11 +967,37 @@ async def cmd_delete(message: Message):
         return
     task_id = int(parts[1])
     with get_conn() as conn:
-        result = conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
-    if result.rowcount > 0:
-        await message.answer(f"🗑 Задача #{task_id} удалена!")
-    else:
+        exists = conn.execute("SELECT id FROM tasks WHERE id=?", (task_id,)).fetchone()
+    if not exists:
         await message.answer(f"❌ Задача #{task_id} не найдена.")
+        return
+    trash_task(task_id)
+    await message.answer(f"🗑 Задача #{task_id} перемещена в корзину.\nВосстановить: /trash")
+
+
+# ─── /trash — корзина: показать и восстановить ───────────────────────────────
+@router.message(Command("trash"))
+async def cmd_trash(message: Message):
+    parts = message.text.split()
+    # /trash restore <id> — восстановить задачу
+    if len(parts) >= 3 and parts[1] == "restore" and parts[2].isdigit():
+        task_id = int(parts[2])
+        restore_from_trash(task_id)
+        await message.answer(f"↩️ Задача #{task_id} восстановлена (статус «Открыта»).")
+        return
+    # /trash — список задач в корзине
+    tasks = get_trashed_tasks()
+    if not tasks:
+        await message.answer("🗑 Корзина пуста.")
+        return
+    lines = ["🗑 *Корзина:*\n"]
+    for t in tasks[:30]:
+        lines.append(
+            f"#{t['id']} {t['title'][:50]}\n"
+            f"   📁 {t.get('project') or '—'} | 👤 {t.get('assignee') or '—'}\n"
+            f"   ↩️ Восстановить: /trash restore {t['id']}"
+        )
+    await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
 # ─── /newtask ──────────────────────────────────────────────────────────────
