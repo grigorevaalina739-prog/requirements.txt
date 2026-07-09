@@ -2,7 +2,8 @@ import logging
 from datetime import datetime, timedelta
 from aiogram import Bot
 from config import NOTIFY_CHAT_ID
-from database import get_overdue_tasks, get_tasks, get_conn, update_status, get_all_users
+from database import (get_overdue_tasks, get_tasks, get_conn, update_status, get_all_users,
+                      get_upcoming_meetings, mark_meeting_reminded)
 from agent import generate_overdue_summary
 
 logger = logging.getLogger(__name__)
@@ -250,3 +251,96 @@ async def morning_briefing(bot: Bot):
         except Exception as e:
             logger.error(f"Ошибка утреннего брифинга для {name}: {e}")
 
+
+# ─── Уведомления о встречах ────────────────────────────────────────────────
+
+def _find_user_by_name(name):
+    """Ищет пользователя по имени/фамилии (как в напоминаниях по задачам)."""
+    name_l = (name or "").lower().strip()
+    if not name_l:
+        return None
+    surname = name_l.split()[0]
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM users").fetchall()
+    for row in rows:
+        row_name = row["name"].lower().strip()
+        if name_l in row_name or row_name in name_l:
+            return dict(row)
+    if len(surname) >= 4:
+        for row in rows:
+            for word in row["name"].lower().strip().split():
+                if surname in word or word in surname:
+                    return dict(row)
+    return None
+
+
+async def notify_meeting_participants(bot: Bot, meeting: dict):
+    """Отправляет уведомление о создании встречи каждому участнику лично."""
+    participants = [p.strip() for p in (meeting.get("participants") or "").split(",") if p.strip()]
+    if not participants:
+        return
+    date = meeting.get("date") or "—"
+    time_start = meeting.get("time_start") or ""
+    time_end = meeting.get("time_end") or ""
+    time_str = time_start + (f"–{time_end}" if time_end else "")
+    title = meeting.get("title") or "Без темы"
+    project = meeting.get("project") or ""
+    desc = meeting.get("description") or ""
+    all_participants = ", ".join(participants)
+
+    text = (
+        f"📅 *Назначена встреча*\n\n"
+        f"📌 *Тема:* {title}\n"
+        f"🗓 *Дата:* {date}"
+        f"{chr(10) + '🕐 *Время:* ' + time_str if time_str else ''}\n"
+        f"👥 *Участники:* {all_participants}"
+        f"{chr(10) + '📁 *Проект:* ' + project if project else ''}"
+        f"{chr(10) + chr(10) + '📝 ' + desc if desc else ''}"
+    )
+    for name in participants:
+        user = _find_user_by_name(name)
+        if not user:
+            continue
+        try:
+            await bot.send_message(user["telegram_id"], text, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Ошибка уведомления о встрече для {name}: {e}")
+
+
+async def check_meeting_reminders(bot: Bot):
+    """Проверяет встречи и шлёт участникам напоминание за 15 минут до начала."""
+    now = datetime.now()
+    meetings = get_upcoming_meetings()
+    for m in meetings:
+        date = m.get("date") or ""
+        time_start = m.get("time_start") or ""
+        if not date or not time_start:
+            continue
+        # Собираем datetime начала встречи
+        try:
+            start_dt = datetime.strptime(f"{date} {time_start}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        delta_min = (start_dt - now).total_seconds() / 60
+        # Окно: от 0 до 15 минут до начала (проверка раз в минуту)
+        if 0 <= delta_min <= 15:
+            participants = [p.strip() for p in (m.get("participants") or "").split(",") if p.strip()]
+            title = m.get("title") or "Без темы"
+            time_str = time_start + (f"–{m['time_end']}" if m.get("time_end") else "")
+            project = m.get("project") or ""
+            text = (
+                f"⏰ *Встреча через 15 минут!*\n\n"
+                f"📌 *Тема:* {title}\n"
+                f"🕐 *Время:* {time_str}"
+                f"{chr(10) + '📁 *Проект:* ' + project if project else ''}\n"
+                f"👥 *Участники:* {', '.join(participants)}"
+            )
+            for name in participants:
+                user = _find_user_by_name(name)
+                if not user:
+                    continue
+                try:
+                    await bot.send_message(user["telegram_id"], text, parse_mode="Markdown")
+                except Exception as e:
+                    logger.error(f"Ошибка напоминания о встрече для {name}: {e}")
+            mark_meeting_reminded(m["id"])
