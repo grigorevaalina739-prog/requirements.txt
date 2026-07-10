@@ -56,6 +56,15 @@ FIELD_LABELS = {
 }
 
 
+ADMINS_FULL_ACCESS = ("Камалов",)  # видят ВСЕ задачи (активные и просроченные), а не только свои
+
+
+def sees_all_tasks(name):
+    """True, если сотрудник имеет полный доступ ко всем задачам."""
+    n = (name or "").lower()
+    return any(a.lower() in n for a in ADMINS_FULL_ACCESS)
+
+
 def is_my_task(task, name):
     """True, если задача назначена данному пользователю.
     Учитывает несколько ответственных через запятую и сравнивает по фамилии точно."""
@@ -399,17 +408,18 @@ async def _show_main_menu(message, name: str):
 
 async def _send_my_tasks(message, name: str):
     all_tasks = get_tasks()
-    surname = name.split()[0].lower()
     seen, active = set(), []
+    full = sees_all_tasks(name)
     for t in all_tasks:
-        assignee_l = (t.get("assignee") or "").lower()
-        if surname in assignee_l and t.get("status") not in ("Выполнена",) and t["title"] not in seen:
+        mine = True if full else is_my_task(t, name)
+        if mine and t.get("status") not in ("Выполнена",) and t["title"] not in seen:
             seen.add(t["title"])
             active.append(t)
     if not active:
         return
     today = datetime.now().strftime("%Y-%m-%d")
-    lines = [f"📋 *Ваши активные задачи ({len(active)}):*\n"]
+    header = "Все активные задачи" if full else "Ваши активные задачи"
+    lines = [f"📋 *{header} ({len(active)}):*\n"]
     for t in active:
         dl = t.get("deadline") or "—"
         flag = " 🔴 *ПРОСРОЧЕНА*" if dl != "—" and dl < today else ""
@@ -451,12 +461,17 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
             return
         name = user["name"]
         all_tasks = get_tasks()
-        my_tasks = [t for t in all_tasks if is_my_task(t, name)
-                    and t.get("status") != "Выполнена"]
+        if sees_all_tasks(name):
+            my_tasks = [t for t in all_tasks if t.get("status") != "Выполнена"]
+            header = "📋 *Все активные задачи:*\n"
+        else:
+            my_tasks = [t for t in all_tasks if is_my_task(t, name)
+                        and t.get("status") != "Выполнена"]
+            header = f"📋 *Ваши задачи, {name}:*\n"
         if not my_tasks:
-            await callback.message.answer("✅ У вас нет активных задач!")
+            await callback.message.answer("✅ Активных задач нет!")
             return
-        lines = [f"📋 *Ваши задачи, {name}:*\n"]
+        lines = [header]
         for t in my_tasks:
             status_icon = {"Открыта": "🔵", "В работе": "🟡", "Просрочена": "🔴", "На согласовании": "🟠"}.get(t["status"], "⚪")
             lines.append(f"{status_icon} *#{t['id']}* {t['title'][:50]}\n   📅 {t.get('deadline') or '—'} | /done {t['id']}")
@@ -492,9 +507,12 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
             await callback.message.answer("❌ Вы не зарегистрированы. Напишите /start")
             return
         name = user["name"]
-        tasks = [t for t in get_overdue_tasks() if is_my_task(t, name)]
+        if sees_all_tasks(name):
+            tasks = get_overdue_tasks()
+        else:
+            tasks = [t for t in get_overdue_tasks() if is_my_task(t, name)]
         if not tasks:
-            await callback.message.answer("✅ У вас нет просроченных задач!")
+            await callback.message.answer("✅ Просроченных задач нет!")
             return
         lines = format_overdue_grouped(tasks)
         await _send_long(callback.message, lines)
@@ -567,7 +585,10 @@ async def cmd_mytasks(message: Message):
         return
     name = user["name"]
     all_tasks = get_tasks()
-    my_tasks = [t for t in all_tasks if name.lower() in (t.get("assignee") or "").lower()]
+    if sees_all_tasks(name):
+        my_tasks = all_tasks
+    else:
+        my_tasks = [t for t in all_tasks if is_my_task(t, name)]
     if not my_tasks:
         await message.answer(f"📋 У вас нет задач, *{name}*.", parse_mode="Markdown")
         return
@@ -1327,9 +1348,12 @@ async def cmd_overdue(message: Message):
         await message.answer("❌ Вы не зарегистрированы. Напишите /start")
         return
     name = user["name"]
-    tasks = [t for t in get_overdue_tasks() if is_my_task(t, name)]
+    if sees_all_tasks(name):
+        tasks = get_overdue_tasks()
+    else:
+        tasks = [t for t in get_overdue_tasks() if is_my_task(t, name)]
     if not tasks:
-        await message.answer("🎉 У вас нет просроченных задач!")
+        await message.answer("🎉 Просроченных задач нет!")
         return
     lines = format_overdue_grouped(tasks)
     await _send_long(message, lines)
