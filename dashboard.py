@@ -1674,6 +1674,11 @@ async def edit_task_page(request):
         f'<option value="{s}" {"selected" if s == task["status"] else ""}>{s}</option>'
         for s in ["Открыта", "В работе", "Выполнена", "На согласовании", "Просрочена", "Заблокирована"]
     )
+    current_assignees = [a.strip() for a in (task["assignee"] or "").split(",") if a.strip()]
+    assignee_checkboxes = "".join(
+        f'<label class="chk"><input type="checkbox" name="assignee" value="{m}" {"checked" if m in current_assignees else ""}> {m}</label>'
+        for m in get_managers()
+    )
     html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -1688,6 +1693,11 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
 .form-wrap {{ max-width: 600px; margin: 32px auto; background: white; border-radius: 12px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }}
 label {{ display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; margin-top: 16px; }}
 input, select, textarea {{ width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; font-family: inherit; }}
+.assignee-box {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 12px; border: 1px solid #E5E7EB; border-radius: 8px; }}
+.assignee-box .chk {{ display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px; font-size: 13px; font-weight: 500; color: #374151; border-radius: 6px; cursor: pointer; }}
+.assignee-box .chk:hover {{ background: #EFF6FF; }}
+.assignee-box .chk input {{ width: auto; margin: 0; cursor: pointer; }}
+@media(max-width:600px) {{ .assignee-box {{ grid-template-columns: 1fr; }} }}
 textarea {{ height: 80px; resize: vertical; }}
 .btns {{ display: flex; gap: 12px; margin-top: 24px; }}
 .btn-save {{ padding: 10px 24px; background: #3B82F6; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }}
@@ -1700,8 +1710,8 @@ textarea {{ height: 80px; resize: vertical; }}
   <form method="post" action="/edit/{task_id}?back={back}">
     <label>Задача</label>
     <input type="text" name="title" value="{task['title'] or ''}" required>
-    <label>Ответственный</label>
-    <input type="text" name="assignee" value="{task['assignee'] or ''}">
+    <label>Ответственные (можно выбрать несколько)</label>
+    <div class="assignee-box">{assignee_checkboxes}</div>
     <label>Отдел</label>
     <input type="text" name="department" value="{task['department'] or ''}">
     <label>Проект</label>
@@ -1735,6 +1745,8 @@ async def edit_task_save(request):
     author = data.get("editor_name", "Дашборд")
     tasks_list = get_tasks()
     old_task = next((t for t in tasks_list if t["id"] == task_id), {})
+    # Несколько ответственных: чекбоксы приходят списком значений name="assignee"
+    assignee_str = ", ".join(a.strip() for a in data.getall("assignee", []) if a.strip())
     fields = {"title": "title", "assignee": "assignee", "department": "department",
               "project": "project", "deadline": "deadline", "status": "status", "comment": "comment"}
     with get_conn() as conn:
@@ -1742,7 +1754,7 @@ async def edit_task_save(request):
             "UPDATE tasks SET title=?, assignee=?, department=?, project=?, deadline=?, status=?, comment=? WHERE id=?",
             (
                 data.get("title", ""),
-                data.get("assignee", ""),
+                assignee_str,
                 data.get("department", ""),
                 data.get("project", ""),
                 data.get("deadline", ""),
@@ -1752,7 +1764,7 @@ async def edit_task_save(request):
             )
         )
         for key, db_key in fields.items():
-            new_val = data.get(key, "")
+            new_val = assignee_str if key == "assignee" else data.get(key, "")
             old_val = str(old_task.get(db_key) or "")
             if new_val != old_val:
                 conn.execute(
