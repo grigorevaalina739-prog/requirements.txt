@@ -215,6 +215,30 @@ def merge_task_assignees():
 
 
 
+def seed_sverka_tasks():
+    """Восстановление задач проекта 'Сверка баз' (только добавление, без удалений)."""
+    PROJECT = "Сверка баз"
+    add_project(PROJECT)
+    TASKS = [
+        {"title": "Проставить отметки в \"хабе\" при отработке складов в 1с",
+         "assignee": "Кострыкин И.", "deadline": "2026-06-30"},
+        {"title": "Предоставить данные по следующим складам:\n- Мирада Брак — произвести списание после подтверждения со стороны склада\n- Мирада недостача\n- Логитранс транзит\n- Мирада инвентаризация",
+         "assignee": "Маркелова И.", "deadline": "2026-06-30"},
+        {"title": "Сформировать отдельный список списаний по Армении",
+         "assignee": "Маркелова И.", "deadline": "2026-06-30"},
+    ]
+    with get_conn() as conn:
+        existing = set(row[0] for row in conn.execute(
+            "SELECT title FROM tasks WHERE project=?", (PROJECT,)
+        ).fetchall())
+        for t in TASKS:
+            if t["title"] not in existing:
+                conn.execute(
+                    "INSERT INTO tasks (project, assignee, department, title, deadline, status, comment) VALUES (?,?,?,?,?,?,?)",
+                    (PROJECT, t["assignee"], "", t["title"], t["deadline"], "Открыта", "")
+                )
+
+
 def seed_sc_tasks_v2():
     """Задачи SC MINISO от пользователя."""
     PROJECT = "SC MINISO"
@@ -424,6 +448,10 @@ def init_db():
         seed_managers()
     except Exception as e:
         print(f"seed_managers error: {e}")
+    try:
+        seed_sverka_tasks()
+    except Exception as e:
+        print(f"seed_sverka_tasks error: {e}")
     # Миграция: поле reminded в meetings (для баз, созданных до этого поля)
     try:
         with get_conn() as conn:
@@ -929,6 +957,30 @@ def merge_task_assignees():
 
 
 
+def seed_sverka_tasks():
+    """Восстановление задач проекта 'Сверка баз' (только добавление, без удалений)."""
+    PROJECT = "Сверка баз"
+    add_project(PROJECT)
+    TASKS = [
+        {"title": "Проставить отметки в \"хабе\" при отработке складов в 1с",
+         "assignee": "Кострыкин И.", "deadline": "2026-06-30"},
+        {"title": "Предоставить данные по следующим складам:\n- Мирада Брак — произвести списание после подтверждения со стороны склада\n- Мирада недостача\n- Логитранс транзит\n- Мирада инвентаризация",
+         "assignee": "Маркелова И.", "deadline": "2026-06-30"},
+        {"title": "Сформировать отдельный список списаний по Армении",
+         "assignee": "Маркелова И.", "deadline": "2026-06-30"},
+    ]
+    with get_conn() as conn:
+        existing = set(row[0] for row in conn.execute(
+            "SELECT title FROM tasks WHERE project=?", (PROJECT,)
+        ).fetchall())
+        for t in TASKS:
+            if t["title"] not in existing:
+                conn.execute(
+                    "INSERT INTO tasks (project, assignee, department, title, deadline, status, comment) VALUES (?,?,?,?,?,?,?)",
+                    (PROJECT, t["assignee"], "", t["title"], t["deadline"], "Открыта", "")
+                )
+
+
 def seed_sc_tasks_v2():
     """Задачи SC MINISO от пользователя."""
     PROJECT = "SC MINISO"
@@ -1138,6 +1190,10 @@ def init_db():
         seed_managers()
     except Exception as e:
         print(f"seed_managers error: {e}")
+    try:
+        seed_sverka_tasks()
+    except Exception as e:
+        print(f"seed_sverka_tasks error: {e}")
     # Миграция: поле reminded в meetings (для баз, созданных до этого поля)
     try:
         with get_conn() as conn:
