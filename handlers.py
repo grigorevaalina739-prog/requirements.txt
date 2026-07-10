@@ -56,6 +56,28 @@ FIELD_LABELS = {
 }
 
 
+def is_my_task(task, name):
+    """True, если задача назначена данному пользователю.
+    Учитывает несколько ответственных через запятую и сравнивает по фамилии точно."""
+    if not name or not name.strip():
+        return False
+    assignee = (task.get("assignee") or "").lower()
+    if not assignee:
+        return False
+    name_l = name.lower().strip()
+    my_surname = name_l.split()[0]
+    # Разбиваем список ответственных (может быть несколько через запятую)
+    for p in [x.strip() for x in assignee.split(",") if x.strip()]:
+        # точное вхождение полного имени в любую сторону
+        if name_l in p or p in name_l:
+            return True
+        # сравнение по фамилии как первому слову
+        p_words = p.split()
+        if p_words and my_surname == p_words[0]:
+            return True
+    return False
+
+
 def format_overdue_grouped(tasks):
     """Читаемый список просроченных задач для руководителя.
 
@@ -429,7 +451,7 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
             return
         name = user["name"]
         all_tasks = get_tasks()
-        my_tasks = [t for t in all_tasks if name.lower() in (t.get("assignee") or "").lower()
+        my_tasks = [t for t in all_tasks if is_my_task(t, name)
                     and t.get("status") != "Выполнена"]
         if not my_tasks:
             await callback.message.answer("✅ У вас нет активных задач!")
@@ -464,9 +486,15 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
             lines.append(f"✅ *#{t['id']}* {t['title'][:50]}")
         await callback.message.answer("\n".join(lines), parse_mode="Markdown")
     elif action == "overdue":
-        tasks = get_overdue_tasks()
+        with get_conn() as conn:
+            user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+        if not user:
+            await callback.message.answer("❌ Вы не зарегистрированы. Напишите /start")
+            return
+        name = user["name"]
+        tasks = [t for t in get_overdue_tasks() if is_my_task(t, name)]
         if not tasks:
-            await callback.message.answer("✅ Просроченных задач нет!")
+            await callback.message.answer("✅ У вас нет просроченных задач!")
             return
         lines = format_overdue_grouped(tasks)
         await _send_long(callback.message, lines)
@@ -1293,9 +1321,15 @@ async def cmd_done(message: Message):
 # ─── /overdue ──────────────────────────────────────────────────────────────
 @router.message(Command("overdue"))
 async def cmd_overdue(message: Message):
-    tasks = get_overdue_tasks()
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
+    if not user:
+        await message.answer("❌ Вы не зарегистрированы. Напишите /start")
+        return
+    name = user["name"]
+    tasks = [t for t in get_overdue_tasks() if is_my_task(t, name)]
     if not tasks:
-        await message.answer("🎉 Просроченных задач нет!")
+        await message.answer("🎉 У вас нет просроченных задач!")
         return
     lines = format_overdue_grouped(tasks)
     await _send_long(message, lines)
