@@ -587,7 +587,7 @@ async def dashboard(request):
         f"  <div class=\"ai-text\"><strong>AI Executive:</strong> {ai_text}</div>\n"
         "  <div class=\"ai-acts\">"
         "<a href=\"/?status=Просрочена\" class=\"ai-btn\">⚠️ Внимание</a>"
-        "<a href=\"/\" class=\"ai-btn\">📊 Отчет</a>"
+        "<a href=\"/report\" class=\"ai-btn\">📊 Отчет</a>"
         "</div>\n</div>\n"
     )
 
@@ -1775,10 +1775,11 @@ async def comment_task_page(request):
     comments_html = ""
     for c in comments:
         time = c.get("created_at", "")[:16]
+        del_btn = f'<a class="cmt-del" href="/comment/delete/{c["id"]}?task_id={task_id}&back={back}" onclick="return confirm(\'Удалить этот комментарий?\')" title="Удалить">🗑</a>'
         if c.get("file_id"):
-            comments_html += f'<div class="comment"><span class="author">📎 {c["author"]}</span><span class="time">{time}</span><div>{c["file_name"]} {c.get("text","")}</div></div>'
+            comments_html += f'<div class="comment"><div class="cmt-head"><span class="author">📎 {c["author"]}</span><span class="time">{time}</span>{del_btn}</div><div>{c["file_name"]} {c.get("text","")}</div></div>'
         else:
-            comments_html += f'<div class="comment"><span class="author">💬 {c["author"]}</span><span class="time">{time}</span><div>{c.get("text","")}</div></div>'
+            comments_html += f'<div class="comment"><div class="cmt-head"><span class="author">💬 {c["author"]}</span><span class="time">{time}</span>{del_btn}</div><div>{c.get("text","")}</div></div>'
     if not comments_html:
         comments_html = '<div style="color:#9CA3AF;font-size:13px;">Комментариев пока нет</div>'
     html = f"""<!DOCTYPE html>
@@ -1798,6 +1799,9 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
 .comment {{ padding: 12px 0; border-bottom: 1px solid #F3F4F6; }}
 .comment:last-child {{ border-bottom: none; }}
 .author {{ font-weight: 600; font-size: 13px; color: #374151; }}
+.cmt-head {{ display: flex; align-items: center; gap: 8px; }}
+.cmt-del {{ margin-left: auto; text-decoration: none; font-size: 14px; opacity: .55; padding: 2px 6px; border-radius: 6px; }}
+.cmt-del:hover {{ opacity: 1; background: #FEE2E2; }}
 .time {{ font-size: 11px; color: #9CA3AF; margin-left: 8px; }}
 textarea {{ width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; font-family: inherit; height: 100px; resize: vertical; margin-top: 12px; }}
 input[type=text] {{ width: 100%; padding: 10px 12px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 14px; margin-top: 8px; }}
@@ -2350,6 +2354,123 @@ async def do_restore_task(request):
 
 
 # ─── Корзина задач ─────────────────────────────────────────────────────────
+@routes.get("/report")
+async def report_page(request):
+    tasks = get_tasks()  # без архива и корзины, включая выполненные
+    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "done", "complete")
+
+    def is_done(status):
+        return any(w in (status or "").strip().lower() for w in done_words)
+
+    # Считаем по каждому сотруднику: всего назначено и сколько закрыто
+    stats = {}
+    for t in tasks:
+        assignee = t.get("assignee") or ""
+        names = [a.strip() for a in assignee.split(",") if a.strip()]
+        for name in names:
+            s = stats.setdefault(name, {"total": 0, "done": 0})
+            s["total"] += 1
+            if is_done(t.get("status")):
+                s["done"] += 1
+
+    # Добавляем сотрудников из справочника, даже если у них 0 задач
+    for m in get_managers():
+        stats.setdefault(m, {"total": 0, "done": 0})
+
+    # Список с расчётом эффективности (процент закрытых)
+    rows_data = []
+    for name, s in stats.items():
+        rate = round(s["done"] / s["total"] * 100) if s["total"] else 0
+        rows_data.append({"name": name, "total": s["total"], "done": s["done"], "rate": rate})
+
+    # Сортировка: сначала по числу закрытых, затем по проценту
+    rows_data.sort(key=lambda r: (r["done"], r["rate"]), reverse=True)
+
+    # Топ-сотрудник: максимум закрытых задач (при равенстве — выше процент). Только если есть закрытые.
+    top_name = None
+    if rows_data and rows_data[0]["done"] > 0:
+        top_name = rows_data[0]["name"]
+
+    max_done = max((r["done"] for r in rows_data), default=0) or 1
+
+    bars = ""
+    for r in rows_data:
+        width = round(r["done"] / max_done * 100)
+        is_top = r["name"] == top_name
+        badge = ' <span class="top-check" title="Самый эффективный сотрудник">✅</span>' if is_top else ""
+        name_cls = "bar-name top" if is_top else "bar-name"
+        bar_cls = "bar-fill top" if is_top else "bar-fill"
+        bars += (
+            f'<div class="bar-row">'
+            f'  <div class="{name_cls}">{r["name"]}{badge}</div>'
+            f'  <div class="bar-track"><div class="{bar_cls}" style="width:{max(width,3)}%;"></div></div>'
+            f'  <div class="bar-val">{r["done"]}<span class="bar-sub">/{r["total"]} · {r["rate"]}%</span></div>'
+            f'</div>'
+        )
+
+    total_done = sum(r["done"] for r in rows_data)
+    total_all = sum(r["total"] for r in rows_data)
+    overall_rate = round(total_done / total_all * 100) if total_all else 0
+
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Отчёт по активности — MINISO</title>
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0;}}
+  body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F9FAFB;color:#111827;}}
+  .topbar{{background:#1E293B;color:white;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;}}
+  .topbar h1{{font-size:19px;font-weight:600;}}
+  .topbar a{{color:#94A3B8;text-decoration:none;font-size:14px;}}
+  .topbar a:hover{{color:white;}}
+  .wrap{{max-width:820px;margin:28px auto;padding:0 16px;}}
+  .summary{{display:flex;gap:12px;margin-bottom:22px;flex-wrap:wrap;}}
+  .sum-card{{flex:1;min-width:150px;background:white;border:1px solid #E5E7EB;border-radius:12px;padding:16px;}}
+  .sum-num{{font-size:26px;font-weight:800;color:#1E293B;}}
+  .sum-lbl{{font-size:12px;color:#64748B;margin-top:2px;}}
+  .card{{background:white;border:1px solid #E5E7EB;border-radius:14px;padding:22px;}}
+  .card h2{{font-size:15px;font-weight:700;margin-bottom:18px;color:#1E293B;}}
+  .bar-row{{display:flex;align-items:center;gap:12px;margin-bottom:14px;}}
+  .bar-name{{width:150px;font-size:13px;color:#334155;font-weight:500;flex-shrink:0;display:flex;align-items:center;gap:5px;}}
+  .bar-name.top{{font-weight:800;color:#059669;}}
+  .top-check{{font-size:14px;}}
+  .bar-track{{flex:1;height:22px;background:#F1F5F9;border-radius:6px;overflow:hidden;}}
+  .bar-fill{{height:100%;background:linear-gradient(90deg,#3b82f6,#6366f1);border-radius:6px;transition:width .4s;}}
+  .bar-fill.top{{background:linear-gradient(90deg,#10b981,#059669);}}
+  .bar-val{{width:96px;text-align:right;font-size:14px;font-weight:700;color:#1E293B;flex-shrink:0;}}
+  .bar-sub{{font-size:11px;color:#94A3B8;font-weight:500;}}
+  .legend{{margin-top:16px;font-size:12px;color:#64748B;}}
+  @media(max-width:600px){{
+    .bar-name{{width:96px;font-size:12px;}}
+    .bar-val{{width:78px;font-size:13px;}}
+  }}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>📊 Отчёт по активности</h1>
+  <a href="/">← Дашборд</a>
+</div>
+<div class="wrap">
+  <div class="summary">
+    <div class="sum-card"><div class="sum-num">{total_done}</div><div class="sum-lbl">Закрыто задач</div></div>
+    <div class="sum-card"><div class="sum-num">{total_all}</div><div class="sum-lbl">Всего задач</div></div>
+    <div class="sum-card"><div class="sum-num">{overall_rate}%</div><div class="sum-lbl">Общая эффективность</div></div>
+  </div>
+  <div class="card">
+    <h2>Закрытые задачи по сотрудникам</h2>
+    {bars}
+    <div class="legend">✅ — самый эффективный сотрудник (больше всего закрытых задач). Формат: закрыто / всего · % выполнения.</div>
+  </div>
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+
+# ─── Корзина задач ─────────────────────────────────────────────────────────
 @routes.get("/trash/task/{task_id}")
 async def do_trash_task(request):
     task_id = int(request.match_info["task_id"])
@@ -2565,6 +2686,16 @@ async def delete_file_route(request):
     back = request.rel_url.query.get("back", "/")
     delete_task_comment(comment_id)
     raise web.HTTPFound(f"/attach/{task_id}?back={back}" if task_id else back)
+
+
+# ─── Удаление комментария ────────────────────────────────────────────────────
+@routes.get("/comment/delete/{comment_id}")
+async def delete_comment_route(request):
+    comment_id = int(request.match_info["comment_id"])
+    task_id = request.rel_url.query.get("task_id", "")
+    back = request.rel_url.query.get("back", "/")
+    delete_task_comment(comment_id)
+    raise web.HTTPFound(f"/comment/{task_id}?back={back}" if task_id else back)
 
 
 # ─── Загрузка файла через дашборд ───────────────────────────────────────────
