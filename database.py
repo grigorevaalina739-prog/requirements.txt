@@ -389,10 +389,11 @@ def init_db():
                 learn_project_from_task(row["title"], row["project"])
     except Exception as e:
         print(f'init_project_patterns error: {e}')
-    try:
-        force_dedup()
-    except Exception as e:
-        print(f"force_dedup error: {e}")
+    # ОТКЛЮЧЕНО: force_dedup удалял задачи при каждом старте (см. историю)
+    # try:
+    #     force_dedup()
+    # except Exception as e:
+    #     print(f"force_dedup error: {e}")
     try:
         merge_task_assignees()
     except Exception as e:
@@ -409,14 +410,16 @@ def init_db():
         migrate_bord_to_miniso()
     except Exception as e:
         print(f"migrate error: {e}")
-    try:
-        seed_bord_16_06()
-    except Exception as e:
-        print(f"seed_bord error: {e}")
-    try:
-        fix_board_miniso_tasks()
-    except Exception as e:
-        print(f"fix_board error: {e}")
+    # ОТКЛЮЧЕНО: разовое сидирование старого набора задач
+    # try:
+    #     seed_bord_16_06()
+    # except Exception as e:
+    #     print(f"seed_bord error: {e}")
+    # ОТКЛЮЧЕНО: fix_board_miniso_tasks удалял задачи по фикс. ID (19,32-37) при каждом старте
+    # try:
+    #     fix_board_miniso_tasks()
+    # except Exception as e:
+    #     print(f"fix_board error: {e}")
     try:
         seed_managers()
     except Exception as e:
@@ -1100,10 +1103,11 @@ def init_db():
                 learn_project_from_task(row["title"], row["project"])
     except Exception as e:
         print(f'init_project_patterns error: {e}')
-    try:
-        force_dedup()
-    except Exception as e:
-        print(f"force_dedup error: {e}")
+    # ОТКЛЮЧЕНО: force_dedup удалял задачи при каждом старте (см. историю)
+    # try:
+    #     force_dedup()
+    # except Exception as e:
+    #     print(f"force_dedup error: {e}")
     try:
         merge_task_assignees()
     except Exception as e:
@@ -1120,14 +1124,16 @@ def init_db():
         migrate_bord_to_miniso()
     except Exception as e:
         print(f"migrate error: {e}")
-    try:
-        seed_bord_16_06()
-    except Exception as e:
-        print(f"seed_bord error: {e}")
-    try:
-        fix_board_miniso_tasks()
-    except Exception as e:
-        print(f"fix_board error: {e}")
+    # ОТКЛЮЧЕНО: разовое сидирование старого набора задач
+    # try:
+    #     seed_bord_16_06()
+    # except Exception as e:
+    #     print(f"seed_bord error: {e}")
+    # ОТКЛЮЧЕНО: fix_board_miniso_tasks удалял задачи по фикс. ID (19,32-37) при каждом старте
+    # try:
+    #     fix_board_miniso_tasks()
+    # except Exception as e:
+    #     print(f"fix_board error: {e}")
     try:
         seed_managers()
     except Exception as e:
