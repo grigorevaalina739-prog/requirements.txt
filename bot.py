@@ -23,6 +23,12 @@ async def main():
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(router)
 
+    # Сбрасываем все накопившиеся обновления при старте — иначе после каждого
+    # рестарта сервиса (деплой на Railway) бот может заново обработать старые
+    # апдейты (например, ранее нажатую кнопку "Удалить"), что приводит к
+    # повторному удалению уже восстановленных задач.
+    await bot.delete_webhook(drop_pending_updates=True)
+
     # Планировщик
     scheduler = AsyncIOScheduler(timezone="Asia/Almaty")
     
