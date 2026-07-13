@@ -368,7 +368,7 @@ async def show_multiple_preview(target, state, edit=False):
             await target.answer(text, reply_markup=multiple_confirm_keyboard(), parse_mode="Markdown")
 
 
-# ─── /start ────────────────────────────────────────────────────────────────
+# ─── /start ─────────────────────────────────────────────────────────────
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
     with get_conn() as conn:
@@ -491,15 +491,20 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
             return
         name = user["name"]
         all_tasks = get_tasks()
-        done_tasks = [t for t in all_tasks if name.lower() in (t.get("assignee") or "").lower()
-                      and t.get("status") == "Выполнена"]
+        if sees_all_tasks(name):
+            done_tasks = [t for t in all_tasks if t.get("status") == "Выполнена"]
+            header = "✅ *Все выполненные задачи:*\n"
+        else:
+            done_tasks = [t for t in all_tasks if is_my_task(t, name)
+                          and t.get("status") == "Выполнена"]
+            header = f"✅ *Выполненные задачи, {name}:*\n"
         if not done_tasks:
-            await callback.message.answer("У вас пока нет выполненных задач.")
+            await callback.message.answer("Выполненных задач пока нет.")
             return
-        lines = [f"✅ *Выполненные задачи, {name}:*\n"]
+        lines = [header]
         for t in done_tasks[-10:]:
-            lines.append(f"✅ *#{t['id']}* {t['title'][:50]}")
-        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+            lines.append(f"✅ *#{t['id']}* {t['title'][:50]} | 👤 {t.get('assignee') or '—'}")
+        await _send_long(callback.message, lines)
     elif action == "overdue":
         with get_conn() as conn:
             user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
@@ -626,7 +631,7 @@ async def save_comment(message: Message, state: FSMContext):
     await message.answer(f"✅ Комментарий к задаче #{task_id} сохранён!")
 
 
-# ─── Файл к задаче ─────────────────────────────────────────────────────────
+# ─── Файл к задаче ──────────────────────────────────────────────────────────
 @router.callback_query(F.data.startswith("addfile_"))
 async def add_file_start(callback: CallbackQuery, state: FSMContext):
     task_id = int(callback.data.replace("addfile_", ""))
@@ -638,7 +643,7 @@ async def add_file_start(callback: CallbackQuery, state: FSMContext):
 
 
 
-# ─── Выбор задачи для прикрепления файла ──────────────────────────────────
+# ─── Выбор задачи для прикрепления файла ────────────────────────────────────
 @router.callback_query(F.data.startswith("attach_pick_"))
 async def attach_pick_task(callback: CallbackQuery, state: FSMContext):
     task_id = int(callback.data.replace("attach_pick_", ""))
@@ -701,7 +706,7 @@ async def save_file(message: Message, state: FSMContext):
     )
 
 
-# ─── История комментариев ──────────────────────────────────────────────────
+# ─── История комментариев ───────────────────────────────────────────────────
 @router.callback_query(F.data.startswith("viewcomments_"))
 async def view_comments(callback: CallbackQuery):
     task_id = int(callback.data.replace("viewcomments_", ""))
@@ -721,7 +726,7 @@ async def view_comments(callback: CallbackQuery):
     await callback.answer()
 
 
-# ─── Редактирование задач ДО сохранения ───────────────────────────────────
+# ─── Редактирование задач ДО сохранения ─────────────────────────────────────
 @router.callback_query(F.data == "edit_tasks_list", TaskCreation.confirming_multiple)
 async def edit_tasks_list(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -788,7 +793,7 @@ async def eom_save_field(message: Message, state: FSMContext):
     )
 
 
-# ─── /editall ─────────────────────────────────────────────────────────────
+# ─── /editall ────────────────────────────────────────────────────────────────
 @router.message(Command("editall"))
 async def cmd_editall(message: Message, state: FSMContext):
     projects = get_projects()
@@ -799,7 +804,6 @@ async def cmd_editall(message: Message, state: FSMContext):
         [InlineKeyboardButton(text=f"📁 {p['name']}", callback_data=f"editall_{i}")] for i, p in enumerate(projects)
     ])
     await message.answer("📁 Выберите проект для редактирования:", reply_markup=kb)
-
 
 @router.callback_query(F.data.startswith("editall_"))
 async def editall_choose_project(callback: CallbackQuery, state: FSMContext):
@@ -947,7 +951,7 @@ async def etask_save_field(message: Message, state: FSMContext):
 
 
 
-# ─── /attach <ID> — прикрепить файл к задаче напрямую ─────────────────────
+# ─── /attach <ID> — прикрепить файл к задаче напрямую ──────────────────────
 @router.message(Command("attach"))
 async def cmd_attach(message: Message, state: FSMContext):
     parts = message.text.split()
@@ -981,7 +985,7 @@ async def cmd_attach(message: Message, state: FSMContext):
     )
 
 
-# ─── /comment <ID> — добавить комментарий к задаче напрямую ───────────────
+# ─── /comment <ID> — добавить комментарий к задаче напрямую ─────────────────
 @router.message(Command("comment"))
 async def cmd_comment(message: Message, state: FSMContext):
     parts = message.text.split()
@@ -1007,7 +1011,7 @@ async def cmd_comment(message: Message, state: FSMContext):
     )
 
 
-# ─── /delete — переместить в корзину ─────────────────────────────────────────
+# ─── /delete — переместить в корзину ────────────────────────────────────────
 @router.message(Command("delete"))
 async def cmd_delete(message: Message):
     parts = message.text.split()
@@ -1024,7 +1028,7 @@ async def cmd_delete(message: Message):
     await message.answer(f"🗑 Задача #{task_id} перемещена в корзину.\nВосстановить: /trash")
 
 
-# ─── /trash — корзина: показать и восстановить ───────────────────────────────
+# ─── /trash — корзина: показать и восстановить ──────────────────────────────
 @router.message(Command("trash"))
 async def cmd_trash(message: Message):
     parts = message.text.split()
@@ -1049,7 +1053,7 @@ async def cmd_trash(message: Message):
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
-# ─── /newtask ──────────────────────────────────────────────────────────────
+# ─── /newtask ────────────────────────────────────────────────────────────────
 @router.message(Command("newtask"))
 async def cmd_newtask(message: Message, state: FSMContext):
     await state.set_state(TaskCreation.waiting_for_text)
@@ -1097,7 +1101,7 @@ async def process_task_text(message: Message, state: FSMContext):
         await message.answer(format_task_text(parsed), reply_markup=task_keyboard(parsed), parse_mode="Markdown")
 
 
-# ─── Выбор проекта ─────────────────────────────────────────────────────────
+# ─── Выбор проекта ───────────────────────────────────────────────────────────
 @router.callback_query(F.data.startswith("proj_"), TaskCreation.choosing_project)
 async def choose_project(callback: CallbackQuery, state: FSMContext):
     proj_data = callback.data.replace("proj_", "")
@@ -1125,7 +1129,7 @@ async def choose_project(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ─── Кнопки изменения ──────────────────────────────────────────────────────
+# ─── Кнопки изменения ────────────────────────────────────────────────────────
 @router.callback_query(F.data == "correct_project", TaskCreation.confirming_multiple)
 async def correct_project(callback: CallbackQuery, state: FSMContext):
     projects = get_projects()
@@ -1163,7 +1167,7 @@ async def apply_correction(message: Message, state: FSMContext):
     await show_multiple_preview(message, state)
 
 
-# ─── Сохранение нескольких задач ───────────────────────────────────────────
+# ─── Сохранение нескольких задач ─────────────────────────────────────────────
 @router.callback_query(F.data == "confirm_multiple", TaskCreation.confirming_multiple)
 async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -1194,7 +1198,7 @@ async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ─── Редактирование одной задачи (при создании) ───────────────────────────
+# ─── Редактирование одной задачи (при создании) ─────────────────────────────
 @router.callback_query(F.data == "edit_task_open", TaskCreation.confirming)
 async def open_edit_form(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -1280,7 +1284,7 @@ async def cancel_task(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ─── /tasks ────────────────────────────────────────────────────────────────
+# ─── /tasks ──────────────────────────────────────────────────────────────────
 @router.message(Command("tasks"))
 async def cmd_tasks(message: Message):
     projects = get_projects()
@@ -1321,7 +1325,7 @@ async def show_project_tasks(callback: CallbackQuery):
     await callback.answer()
 
 
-# ─── /done ─────────────────────────────────────────────────────────────────
+# ─── /done ───────────────────────────────────────────────────────────────────
 @router.message(Command("done"))
 async def cmd_done(message: Message):
     parts = message.text.split()
@@ -1339,7 +1343,7 @@ async def cmd_done(message: Message):
     await message.answer(f"✅ Задача #{task_id} выполнена! Записано: {author}")
 
 
-# ─── /overdue ──────────────────────────────────────────────────────────────
+# ─── /overdue ────────────────────────────────────────────────────────────────
 @router.message(Command("overdue"))
 async def cmd_overdue(message: Message):
     with get_conn() as conn:
@@ -1359,7 +1363,7 @@ async def cmd_overdue(message: Message):
     await _send_long(message, lines)
 
 
-# ─── /projects ─────────────────────────────────────────────────────────────
+# ─── /projects ────────────────────────────────────────────────────────────────
 @router.message(Command("projects"))
 async def cmd_projects(message: Message):
     projects = get_projects()
@@ -1375,14 +1379,14 @@ async def cmd_projects(message: Message):
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
-# ─── /newproject ───────────────────────────────────────────────────────────
+# ─── /newproject ────────────────────────────────────────────────────────────
 @router.message(Command("newproject"))
 async def cmd_newproject(message: Message, state: FSMContext):
     await state.set_state(ProjectAdding.waiting_for_name)
     await message.answer("📁 Введите название проекта:")
 
 
-# ─── Добавление проекта (FSM) ──────────────────────────────────────────────
+# ─── Добавление проекта (FSM) ────────────────────────────────────────────────
 @router.message(ProjectAdding.waiting_for_name)
 async def process_project_name(message: Message, state: FSMContext):
     name = message.text.strip()
@@ -1391,7 +1395,7 @@ async def process_project_name(message: Message, state: FSMContext):
     await message.answer(f"✅ Проект *{name}* создан!", parse_mode="Markdown")
 
 
-# ─── Универсальный обработчик — любой текст создаёт задачу ────────────────
+# ─── Универсальный обработчик — любой текст создаёт задачу ──────────────────
 # Срабатывает только когда нет активного FSM состояния и это не команда
 @router.message(F.text, ~F.text.startswith("/"))
 async def universal_task_creator(message: Message, state: FSMContext):
@@ -1401,7 +1405,7 @@ async def universal_task_creator(message: Message, state: FSMContext):
         # Если есть активный FSM — не перехватываем
         return
 
-    # Авторегистрация если ещё не зарегистрирован
+    # Автореагистрация если ещё не зарегистрирован
     with get_conn() as conn:
         user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
     if not user:
@@ -1463,7 +1467,7 @@ async def universal_task_creator(message: Message, state: FSMContext):
 
 
 
-# ─── Выбор ответственного из списка руководителей ─────────────────────────
+# ─── Выбор ответственного из списка руководителей ───────────────────────────
 @router.callback_query(F.data.startswith("mgr_"), TaskCreation.choosing_assignee)
 async def choose_manager(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -1532,7 +1536,7 @@ async def choose_manager(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-# ─── /assignees — показать список руководителей ────────────────────────────
+# ─── /assignees — показать список руководителей ─────────────────────────────
 @router.message(Command("assignees"))
 async def cmd_assignees(message: Message):
     lines = ["👥 *Список руководителей:*\n"]
@@ -1541,7 +1545,7 @@ async def cmd_assignees(message: Message):
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
-# ─── /deleteuser — удалить пользователя из базы ───────────────────────────
+# ─── /deleteuser — удалить пользователя из базы ─────────────────────────────
 @router.message(Command("deleteuser"))
 async def cmd_delete_user(message: Message):
     parts = message.text.split(maxsplit=1)
@@ -1563,7 +1567,7 @@ async def cmd_delete_user(message: Message):
 
 
 
-# ─── Выбор проекта для прикрепления файла ─────────────────────────────────
+# ─── Выбор проекта для прикрепления файла ────────────────────────────────────
 @router.callback_query(F.data.startswith("attach_proj_"))
 async def attach_select_project(callback: CallbackQuery, state: FSMContext):
     proj = callback.data.replace("attach_proj_", "")
