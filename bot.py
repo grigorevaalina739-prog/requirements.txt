@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiohttp import web
 from config import BOT_TOKEN
 from handlers import router
-from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, escalate_overdue, weekly_digest, morning_briefing, check_meeting_reminders
+from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, weekly_digest, morning_briefing, check_meeting_reminders
 from database import init_db
 from dashboard import create_app
 
@@ -32,11 +32,9 @@ async def main():
     # Утренний брифинг каждому сотруднику — каждый день в 9:00
     scheduler.add_job(morning_briefing, trigger="cron", hour=9, minute=0, args=[bot])
 
-    # Сводка просроченных в общий чат — каждый день в 9:00
+    # Личные уведомления о просроченных задачах каждому ответственному
+    # (Камалов Н. получает полный список всех просроченных задач) — каждый день в 9:00
     scheduler.add_job(check_overdue_tasks, trigger="cron", hour=9, minute=0, args=[bot])
-
-    # Эскалация руководителю если просрочено 3+ дней — каждый день в 9:05
-    scheduler.add_job(escalate_overdue, trigger="cron", hour=9, minute=5, args=[bot])
 
     # Еженедельный дайджест каждому сотруднику — каждый понедельник в 9:00
     scheduler.add_job(weekly_digest, trigger="cron", day_of_week="mon", hour=9, minute=0, args=[bot])
