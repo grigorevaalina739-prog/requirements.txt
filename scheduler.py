@@ -1,26 +1,69 @@
 import logging
 from datetime import datetime, timedelta
 from aiogram import Bot
-from config import NOTIFY_CHAT_ID
 from database import (get_overdue_tasks, get_tasks, get_conn, update_status, get_all_users,
                       get_upcoming_meetings, mark_meeting_reminded)
-from agent import generate_overdue_summary
+from handlers import sees_all_tasks, is_my_task, format_overdue_grouped
 
 logger = logging.getLogger(__name__)
 
 
+async def _send_long_bot(bot: Bot, telegram_id, lines):
+    """Отправляет длинный список сообщений через bot.send_message, разбивая на части ~3500 символов."""
+    chunk = []
+    size = 0
+    for line in lines:
+        if size + len(line) > 3500 and chunk:
+            await bot.send_message(telegram_id, "\n".join(chunk), parse_mode="Markdown")
+            chunk = []
+            size = 0
+        chunk.append(line)
+        size += len(line) + 1
+    if chunk:
+        await bot.send_message(telegram_id, "\n".join(chunk), parse_mode="Markdown")
+
+
 async def check_overdue_tasks(bot: Bot):
-    """Сводка просроченных задач в общий чат."""
+    """Личные уведомления о просроченных задачах — каждому только его задачи.
+
+    Формат — как в /overdue (format_overdue_grouped):
+        🔴 #ID Название
+        📁 Проект
+        👤 Ответственный
+        📅 Дедлайн (просрочено N дн.)
+
+    Сотрудники с полным доступом (Камалов Н.) получают полный список
+    всех просроченных задач, остальные — только свои.
+    """
     logger.info("Проверка просроченных задач...")
-    tasks = get_overdue_tasks()
-    if not tasks:
+    all_overdue = get_overdue_tasks()
+    if not all_overdue:
         return
-    summary = await generate_overdue_summary(tasks)
+
     try:
-        await bot.send_message(chat_id=NOTIFY_CHAT_ID, text=summary, parse_mode="Markdown")
-        logger.info(f"Отправлено уведомление о {len(tasks)} просроченных задачах.")
-    except Exception as e:
-        logger.error(f"Ошибка отправки: {e}")
+        users = get_all_users()
+    except Exception:
+        logger.error("Не удалось получить список пользователей для уведомлений")
+        return
+
+    for user in users:
+        name = user["name"]
+        telegram_id = user["telegram_id"]
+
+        if sees_all_tasks(name):
+            my_overdue = all_overdue
+        else:
+            my_overdue = [t for t in all_overdue if is_my_task(t, name)]
+
+        if not my_overdue:
+            continue
+
+        lines = format_overdue_grouped(my_overdue)
+        try:
+            await _send_long_bot(bot, telegram_id, lines)
+            logger.info(f"Отправлено уведомление о {len(my_overdue)} просроченных задачах для {name}.")
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления о просрочке для {name}: {e}")
 
 
 async def auto_mark_overdue(bot: Bot):
@@ -59,35 +102,6 @@ async def auto_mark_overdue(bot: Bot):
                         logger.error(f"Ошибка уведомления о просрочке: {e}")
     if count:
         logger.info(f"Автоматически помечено просроченными: {count} задач")
-
-
-async def escalate_overdue(bot: Bot):
-    """Эскалация руководителю если задача просрочена 3+ дней."""
-    if not NOTIFY_CHAT_ID:
-        return
-    today = datetime.now().date()
-    tasks = get_overdue_tasks()
-    critical = []
-    for task in tasks:
-        try:
-            deadline = datetime.strptime(task["deadline"], "%Y-%m-%d").date()
-            days_over = (today - deadline).days
-            if days_over >= 3:
-                critical.append((task, days_over))
-        except Exception:
-            continue
-    if not critical:
-        return
-    lines = ["⚠️ *Требуют внимания руководителя:*\n"]
-    for task, days in critical:
-        lines.append(
-            f"🔴 *#{task['id']}* {task['title']}\n"
-            f"   👤 {task['assignee'] or '—'} | просрочено на *{days} дн.*"
-        )
-    try:
-        await bot.send_message(NOTIFY_CHAT_ID, "\n".join(lines), parse_mode="Markdown")
-    except Exception as e:
-        logger.error(f"Ошибка эскалации: {e}")
 
 
 async def check_deadline_reminders(bot: Bot):
