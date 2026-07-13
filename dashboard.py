@@ -107,8 +107,8 @@ def task_row(t, project_filter="", status_filter=""):
         done_btn_menu = (
             f'<a href="#" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#374151;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
             f"onclick=\"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;\">↩️ Переоткрыть</a>"
-            f'<a href="/archive/task/{tid}?back={back_url}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#8b5cf6;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
-            f"onclick=\"return confirm('Архивировать задачу #{tid}?')\">📦 В архив</a>"
+            f'<a href="#" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#8b5cf6;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
+            f"onclick=\"if(confirm('Архивировать задачу #{tid}?')){{fetch('/archive/task/{tid}',{{method:'POST'}}).then(()=>location.reload())}};return false;\">📦 В архив</a>"
         )
     else:
         done_btn_menu = (
@@ -124,8 +124,8 @@ def task_row(t, project_filter="", status_filter=""):
         status_item = (
             mi('↩️ Переоткрыть', '#', color='#64748B',
                onclick=f"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;") + '↩️ Переоткрыть</a>'
-            + mi('📦 В архив', f'/archive/task/{tid}?back={back_url}', color='#8b5cf6',
-               onclick=f"return confirm('Архивировать задачу #{tid}?')") + '📦 В архив</a>'
+            + mi('📦 В архив', '#', color='#8b5cf6',
+               onclick=f"if(confirm('Архивировать задачу #{tid}?')){{fetch('/archive/task/{tid}',{{method:'POST'}}).then(()=>location.reload())}};return false;") + '📦 В архив</a>'
         )
     else:
         status_item = (
@@ -145,7 +145,7 @@ def task_row(t, project_filter="", status_filter=""):
         f'{mi("📎 Вложения", f"/attach/{tid}")}📎 Вложения</a>'
         f'{mi("🕐 История", f"/history/{tid}")}🕐 История</a>'
         '<div style="height:1px;background:#F1F5F9;margin:4px 0;"></div>'
-        f'{mi("🗑 В корзину", f"/trash/task/{tid}?back={back_url}", color="#DC2626", onclick=f"return confirm(&#39;Переместить задачу #{tid} в корзину?&#39;)")}🗑 В корзину</a>'
+        f'{mi("🗑 В корзину", "#", color="#DC2626", onclick=f"if(confirm(&#39;Переместить задачу #{tid} в корзину?&#39;)){{fetch(&#39;/trash/task/{tid}&#39;,{{method:&#39;POST&#39;}}).then(()=>location.reload())}};return false;")}🗑 В корзину</a>'
         '</div></div></div>'
     )
 
@@ -193,7 +193,7 @@ async def dashboard(request):
         tasks = [t for t in tasks if t.get("status") in ("Открыта", "В работе", "На согласовании")]
     elif kpi_filter == "overdue":
         today_str = datetime.now().strftime("%Y-%m-%d")
-        done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "архив")
+        done_words = ("выполн", "готов", "завреш", "закрыт", "сделан", "архив")
         tasks = [
             t for t in tasks
             if (t.get("deadline") or "") and (t.get("deadline") or "") < today_str
@@ -415,8 +415,8 @@ async def dashboard(request):
         ".tb-blue{color:white;background:var(--accent);}\n"
         ".tb-blue:hover{background:#2563eb;}\n"
         ".hero{position:relative;overflow:hidden;padding:36px 32px;background:linear-gradient(160deg,#ff8a80 0%,#ff5252 50%,#e53935 100%);border-bottom:1px solid rgba(255,255,255,.15);}\n"
-        ".hero::before{content:\'\';position:absolute;top:-80px;right:-40px;width:320px;height:320px;background:radial-gradient(circle,rgba(79,142,247,.08) 0%,transparent 70%);pointer-events:none;}\n"
-        ".hero::after{content:\'\';position:absolute;bottom:-60px;left:35%;width:400px;height:260px;background:radial-gradient(circle,rgba(59,130,246,.07) 0%,transparent 70%);pointer-events:none;}\n"
+        ".hero::before{content:'';position:absolute;top:-80px;right:-40px;width:320px;height:320px;background:radial-gradient(circle,rgba(79,142,247,.08) 0%,transparent 70%);pointer-events:none;}\n"
+        ".hero::after{content:'';position:absolute;bottom:-60px;left:35%;width:400px;height:260px;background:radial-gradient(circle,rgba(59,130,246,.07) 0%,transparent 70%);pointer-events:none;}\n"
         ".redline{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#4f8ef7 40%,#8b78f0 60%,transparent);}\n"
         ".hero-inner{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;}\n"
         ".eyebrow{font-size:10px;font-weight:700;letter-spacing:2px;color:#ef4444;text-transform:uppercase;margin-bottom:6px;}\n"
@@ -1038,7 +1038,7 @@ async def admin_merge(request):
 
 
 
-# ─── AI Агент постановки задач (ПРОКАЧАННЫЙ) ──────────────────────────────
+# ─── AI Агент постановки задач (ПРОКАЧАННЫЙ) ─────────────────────────────────
 @routes.get("/agent")
 async def agent_page(request):
     projects = get_projects()
@@ -1210,14 +1210,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="av">🤖</div>
       <div class="bubble">
         <b>Привет! Я ваш AI-ассистент по постановке задач.</b><br><br>
-        Опишите задачу — я распознаю:<br>
+        Опишите задачу — я распознаю:
         <ul>
           <li>Кому назначить</li>
           <li>В какой проект</li>
           <li>Срок выполнения</li>
           <li>Формулировку задачи</li>
         </ul><br>
-        Можно писать как угодно — голосом мысли, с ошибками, кратко. Я разберусь 👌
+        Можно писать как удобно — голосом мысли, с ошибками, кратко. Я разберусь 👌
       </div>
     </div>
   </div>
@@ -1259,8 +1259,8 @@ function addMsg(role, html){
   const chat = document.getElementById('chat');
   const div = document.createElement('div');
   div.className = 'msg ' + role;
-  const av = role==='user' ? '<div class="av" style="background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;font-size:11px;font-weight:700;">ВЫ</div>' : '<div class="av">🤖</div>';
-  div.innerHTML = av + `<div class="bubble">${html}</div>`;
+  const av = role==='user' ? '<div class=\"av\" style=\"background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;font-size:11px;font-weight:700;\">\u0412\u042b</div>' : '<div class=\"av\">\ud83e\udd16</div>';
+  div.innerHTML = av + `<div class=\"bubble\">${html}</div>`;
   chat.appendChild(div);
   chat.scrollTop = 99999;
   return div;
@@ -1279,42 +1279,42 @@ function showTyping(){
   const chat = document.getElementById('chat');
   const d = document.createElement('div');
   d.className = 'msg ai'; d.id = 'typing';
-  d.innerHTML = '<div class="av">🤖</div><div class="typing-dots"><span></span><span></span><span></span></div>';
+  d.innerHTML = '<div class=\"av\">\ud83e\udd16</div><div class=\"typing-dots\"><span></span><span></span><span></span></div>';
   chat.appendChild(d); chat.scrollTop = 99999;
 }
 function hideTyping(){const t=document.getElementById('typing');if(t)t.remove();}
 
 function renderCard(task, idx=''){
   const projectBadge = task._project_predicted
-    ? `<span class="tc-badge predicted">🎯 Предсказано</span>`
-    : (task.project ? `<span class="tc-badge">✓ Определён</span>` : `<span class="tc-badge" style="background:#fef2f2;color:#dc2626;">⚠️ Не определён</span>`);
+    ? `<span class=\"tc-badge predicted\">\ud83c\udfaf \u041f\u0440\u0435\u0434\u0441\u043a\u0430\u0437\u0430\u043d\u043e</span>`
+    : (task.project ? `<span class=\"tc-badge\">\u2713 \u041e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d</span>` : `<span class=\"tc-badge\" style=\"background:#fef2f2;color:#dc2626;\">\u26a0\ufe0f \u041d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d</span>`);
 
-  const fv = (val, fallback='—') => val ? `<span class="field-val">${val}</span>` : `<span class="field-val missing">${fallback}</span>`;
+  const fv = (val, fallback='\u2014') => val ? `<span class=\"field-val\">${val}</span>` : `<span class=\"field-val missing\">${fallback}</span>`;
 
-  return `<div class="task-card" id="card${idx}">
-    <div class="tc-head"><h3>📋 Задача распознана</h3>${projectBadge}</div>
-    <div class="field-row"><span class="field-icon">📌</span><span class="field-label">Название</span>${fv(task.title,'Не указано')}</div>
-    <div class="field-row"><span class="field-icon">👤</span><span class="field-label">Ответственный</span>${fv(task.assignee,'Не определён — выберите')}</div>
-    <div class="field-row"><span class="field-icon">📁</span><span class="field-label">Проект</span>${fv(task.project,'Не определён — выберите')}</div>
-    <div class="field-row"><span class="field-icon">📅</span><span class="field-label">Срок</span>${fv(task.deadline,'Не указан')}</div>
-    ${task.description && task.description !== task.title ? `<div class="field-row"><span class="field-icon">💬</span><span class="field-label">Описание</span><span class="field-val" style="font-size:12px;color:#64748b;">${task.description}</span></div>` : ''}
-    <div class="tc-actions">
-      <button class="btn btn-ok" onclick="confirm_${idx}()">✅ Создать задачу</button>
-      <button class="btn btn-edit" onclick="toggleEdit('edit${idx}')">✏️ Изменить</button>
-      <button class="btn btn-cancel" onclick="cancelCard('card${idx}')">✕</button>
+  return `<div class=\"task-card\" id=\"card${idx}\">
+    <div class=\"tc-head\"><h3>\ud83d\udccb \u0417\u0430\u0434\u0430\u0447\u0430 \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430\u043d\u0430</h3>${projectBadge}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udccc</span><span class=\"field-label\">\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435</span>${fv(task.title,'\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u043e')}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udc64</span><span class=\"field-label\">\u041e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439</span>${fv(task.assignee,'\u041d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d \u2014 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435')}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udcc1</span><span class=\"field-label\">\u041f\u0440\u043e\u0435\u043a\u0442</span>${fv(task.project,'\u041d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d \u2014 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435')}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udcc5</span><span class=\"field-label\">\u0421\u0440\u043e\u043a</span>${fv(task.deadline,'\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d')}</div>
+    ${task.description && task.description !== task.title ? `<div class=\"field-row\"><span class=\"field-icon\">\ud83d\udcac</span><span class=\"field-label\">\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435</span><span class=\"field-val\" style=\"font-size:12px;color:#64748b;\">${task.description}</span></div>` : ''}
+    <div class=\"tc-actions\">
+      <button class=\"btn btn-ok\" onclick=\"confirm_${idx}()\">\u2705 \u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u0434\u0430\u0447\u0443</button>
+      <button class=\"btn btn-edit\" onclick=\"toggleEdit('edit${idx}')\">\u270f\ufe0f \u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c</button>
+      <button class=\"btn btn-cancel\" onclick=\"cancelCard('card${idx}')\">\u2715</button>
     </div>
-    <div class="edit-panel" id="edit${idx}">
-      <div class="ep-row"><label>Название задачи</label><textarea id="et_title${idx}">${task.title||''}</textarea></div>
-      <div class="ep-row"><label>Ответственные (можно несколько)</label>
-        <div class="ep-assignees" id="et_assignee${idx}">
-        ${MANAGERS.map(m=>{const sel=(task.assignee||'').split(',').map(x=>x.trim()).includes(m);return `<label class="ep-chk"><input type="checkbox" value="${m}"${sel?' checked':''}> ${m}</label>`}).join('')}
+    <div class=\"edit-panel\" id=\"edit${idx}\">
+      <div class=\"ep-row\"><label>\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0437\u0430\u0434\u0430\u0447\u0438</label><textarea id=\"et_title${idx}\">${task.title||''}</textarea></div>
+      <div class=\"ep-row\"><label>\u041e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 (\u043c\u043e\u0436\u043d\u043e \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e)</label>
+        <div class=\"ep-assignees\" id=\"et_assignee${idx}\">
+        ${MANAGERS.map(m=>{const sel=(task.assignee||'').split(',').map(x=>x.trim()).includes(m);return `<label class=\"ep-chk\"><input type=\"checkbox\" value=\"${m}\"${sel?' checked':''}> ${m}</label>`}).join('')}
         </div></div>
-      <div class="ep-row"><label>Проект</label>
-        <select id="et_project${idx}"><option value="">— Выберите —</option>
-        ${PROJECTS.map(p=>`<option value="${p}"${p===task.project?' selected':''}>${p}</option>`).join('')}
+      <div class=\"ep-row\"><label>\u041f\u0440\u043e\u0435\u043a\u0442</label>
+        <select id=\"et_project${idx}\"><option value=\"\">\u2014 \u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u2014</option>
+        ${PROJECTS.map(p=>`<option value=\"${p}\"${p===task.project?' selected':''}>${p}</option>`).join('')}
         </select></div>
-      <div class="ep-row"><label>Срок</label><input type="date" id="et_deadline${idx}" value="${task.deadline||''}"></div>
-      <button class="ep-save" onclick="saveEdit('${idx}')">💾 Сохранить</button>
+      <div class=\"ep-row\"><label>\u0421\u0440\u043e\u043a</label><input type=\"date\" id=\"et_deadline${idx}\" value=\"${task.deadline||''}\"></div>
+      <button class=\"ep-save\" onclick=\"saveEdit('${idx}')\">\ud83d\udcbe \u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c</button>
     </div>
   </div>`;
 }
@@ -1325,7 +1325,7 @@ function cancelCard(id){
   const el = document.getElementById(id);
   if(el) el.closest('div').remove();
   pendingTask = null;
-  addMsg('ai','Отменено. Опишите новую задачу.');
+  addMsg('ai','\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043e. \u041e\u043f\u0438\u0448\u0438\u0442\u0435 \u043d\u043e\u0432\u0443\u044e \u0437\u0430\u0434\u0430\u0447\u0443.');
 }
 
 function saveEdit(idx){
@@ -1340,7 +1340,7 @@ function saveEdit(idx){
   if(card) card.outerHTML = renderCard(pendingTask, idx);
   // Re-register confirm function
   window['confirm_'+idx] = () => createTask(pendingTask, idx);
-  addMsg('ai','✅ Данные обновлены!');
+  addMsg('ai','\u2705 \u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b!');
 }
 
 async function createTask(task, idx){
@@ -1358,7 +1358,7 @@ async function createTask(task, idx){
     // Success banner
     const banner = document.createElement('div');
     banner.className = 'success-banner';
-    banner.innerHTML = `<div class="s-icon">🎉</div><div class="s-text"><b>Задача #${d.task_id} создана!</b>${task.title} → ${task.assignee||'—'} · ${task.project||'—'} · ${task.deadline||'без срока'}</div><a href="/">Открыть</a>`;
+    banner.innerHTML = `<div class=\"s-icon\">\ud83c\udf89</div><div class=\"s-text\"><b>\u0417\u0430\u0434\u0430\u0447\u0430 #${d.task_id} \u0441\u043e\u0437\u0434\u0430\u043d\u0430!</b>${task.title} \u2192 ${task.assignee||'\u2014'} \u00b7 ${task.project||'\u2014'} \u00b7 ${task.deadline||'\u0431\u0435\u0437 \u0441\u0440\u043e\u043a\u0430'}</div><a href=\"/\">\u041e\u0442\u043a\u0440\u044b\u0442\u044c</a>`;
     addElement(banner);
 
     // Add to history
@@ -1366,9 +1366,9 @@ async function createTask(task, idx){
     updateHistory();
     pendingTask = null;
 
-    addMsg('ai', `Готово! Задача поставлена. Хотите добавить ещё одну?`);
+    addMsg('ai', `\u0413\u043e\u0442\u043e\u0432\u043e! \u0417\u0430\u0434\u0430\u0447\u0430 \u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0430. \u0425\u043e\u0442\u0438\u0442\u0435 \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0435\u0449\u0451 \u043e\u0434\u043d\u0443?`);
   } catch(e){
-    addMsg('ai','❌ Ошибка при создании. Попробуйте ещё раз.');
+    addMsg('ai','\u274c \u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u0438. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0435\u0449\u0451 \u0440\u0430\u0437.');
     if(btn) btn.disabled = false;
   }
 }
@@ -1376,13 +1376,13 @@ async function createTask(task, idx){
 function updateHistory(){
   const list = document.getElementById('historyList');
   if(!sessionTasks.length){
-    list.innerHTML = '<div style="font-size:12px;color:#cbd5e1;text-align:center;padding:16px;">Ещё нет задач</div>';
+    list.innerHTML = '<div style=\"font-size:12px;color:#cbd5e1;text-align:center;padding:16px;\">\u0415\u0449\u0451 \u043d\u0435\u0442 \u0437\u0430\u0434\u0430\u0447</div>';
     return;
   }
   list.innerHTML = sessionTasks.slice().reverse().map(t => `
-    <div class="hist-item">
-      <div class="h-title">${t.title}</div>
-      <div class="h-meta">👤 ${t.assignee||'—'} · #${t.id}</div>
+    <div class=\"hist-item\">
+      <div class=\"h-title\">${t.title}</div>
+      <div class=\"h-meta\">\ud83d\udc64 ${t.assignee||'\u2014'} \u00b7 #${t.id}</div>
     </div>`).join('');
 }
 
@@ -1532,7 +1532,7 @@ async def agent_create_v2(request):
     return web.json_response({"task_id": task_id, "ok": True})
 
 
-# ─── Управление сотрудниками ────────────────────────────────────────────────
+# ─── Управление сотрудниками ─────────────────────────────────────────────────
 @routes.get("/managers")
 async def managers_page(request):
     """Страница со списком сотрудников: добавление и удаление."""
@@ -1656,7 +1656,7 @@ def create_app():
     app.add_routes(routes)
     return app
 
-# ─── Страница редактирования задачи ────────────────────────────────────────
+# ─── Страница редактирования задачи ─────────────────────────────────────────
 @routes.get("/edit/{task_id}")
 async def edit_task_page(request):
     task_id = int(request.match_info["task_id"])
@@ -1774,7 +1774,7 @@ async def edit_task_save(request):
     raise web.HTTPFound(back)
 
 
-# ─── Страница комментария ───────────────────────────────────────────────────
+# ─── Страница комментария ─────────────────────────────────────────────────────
 @routes.get("/comment/{task_id}")
 async def comment_task_page(request):
     task_id = int(request.match_info["task_id"])
@@ -1863,7 +1863,7 @@ async def comment_task_save(request):
     raise web.HTTPFound(f"/comment/{task_id}?back={back}")
 
 
-# ─── Страница вложений ──────────────────────────────────────────────────────
+# ─── Страница вложений ───────────────────────────────────────────────────────
 @routes.get("/attach/{task_id}")
 async def attach_task_page(request):
     task_id = int(request.match_info["task_id"])
@@ -2019,7 +2019,7 @@ tr:hover {{ transform: scaleY(1.02); box-shadow: 0 4px 12px rgba(0,0,0,0.08); po
 
 
 
-# ─── Календарь встреч ──────────────────────────────────────────────────────
+# ─── Календарь встреч ─────────────────────────────────────────────────────────
 @routes.get("/calendar")
 async def calendar_page(request):
     from datetime import datetime, timedelta
@@ -2349,13 +2349,12 @@ async def calendar_edit_save(request):
 
 
 
-# ─── Архив задач ───────────────────────────────────────────────────────────
-@routes.get("/archive/task/{task_id}")
+# ─── Архив задач ─────────────────────────────────────────────────────────────
+@routes.post("/archive/task/{task_id}")
 async def do_archive_task(request):
     task_id = int(request.match_info["task_id"])
     archive_task(task_id)
-    back = request.rel_url.query.get("back", "/")
-    raise web.HTTPFound(back)
+    return web.json_response({"ok": True})
 
 
 @routes.get("/archive/restore/{task_id}")
@@ -2369,7 +2368,7 @@ async def do_restore_task(request):
 @routes.get("/report")
 async def report_page(request):
     tasks = get_tasks()  # без архива и корзины, включая выполненные
-    done_words = ("выполн", "готов", "заверш", "закрыт", "сделан", "done", "complete")
+    done_words = ("выполн", "готов", "завреш", "закрыт", "сделан", "done", "complete")
 
     def is_done(status):
         return any(w in (status or "").strip().lower() for w in done_words)
@@ -2483,26 +2482,25 @@ async def report_page(request):
 
 
 # ─── Корзина задач ─────────────────────────────────────────────────────────
-@routes.get("/trash/task/{task_id}")
+@routes.post("/trash/task/{task_id}")
 async def do_trash_task(request):
     task_id = int(request.match_info["task_id"])
     trash_task(task_id)
-    back = request.rel_url.query.get("back", "/")
-    raise web.HTTPFound(back)
+    return web.json_response({"ok": True})
 
 
-@routes.get("/trash/restore/{task_id}")
+@routes.post("/trash/restore/{task_id}")
 async def do_restore_from_trash(request):
     task_id = int(request.match_info["task_id"])
     restore_from_trash(task_id)
-    raise web.HTTPFound("/trash")
+    return web.json_response({"ok": True})
 
 
-@routes.get("/trash/delete/{task_id}")
+@routes.post("/trash/delete/{task_id}")
 async def do_delete_permanently(request):
     task_id = int(request.match_info["task_id"])
     delete_task_permanently(task_id)
-    raise web.HTTPFound("/trash")
+    return web.json_response({"ok": True})
 
 
 @routes.get("/trash")
@@ -2522,9 +2520,9 @@ async def trash_page(request):
                 f'    <div class="trash-meta">📁 {proj} · 👤 {who} · 📅 {dl}</div>'
                 f'  </div>'
                 f'  <div class="trash-actions">'
-                f'    <a class="tr-btn tr-restore" href="/trash/restore/{t["id"]}">↩️ Восстановить</a>'
+                f'    <a class="tr-btn tr-restore" href="#" onclick="fetch(\'/trash/restore/{t["id"]}\',{{method:\'POST\'}}).then(()=>location.reload());return false;">↩️ Восстановить</a>'
                 f'    <a class="tr-btn tr-edit" href="/edit/{t["id"]}">✏️ Изменить</a>'
-                f'    <a class="tr-btn tr-del" href="/trash/delete/{t["id"]}" onclick="return confirm(\'Удалить задачу #{t["id"]} НАВСЕГДА? Это действие необратимо.\')">❌ Удалить навсегда</a>'
+                f'    <a class="tr-btn tr-del" href="#" onclick="if(confirm(\'Удалить задачу #{t["id"]} НАВСЕГДА? Это действие необратимо.\')){{fetch(\'/trash/delete/{t["id"]}\',{{method:\'POST\'}}).then(()=>location.reload())}};return false;">❌ Удалить навсегда</a>'
                 f'  </div>'
                 f'</div>'
             )
@@ -2637,7 +2635,7 @@ async def archive_page(request):
                         </div>
                         {f'<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.05);">{files_html}</div>' if files_html else ""}
                     </div>
-                    <a href="/archive/restore/{t["id"]}" style="padding:6px 14px;background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:12px;text-decoration:none;white-space:nowrap;transition:all .15s;" onmouseover="this.style.color=\'white\'" onmouseout="this.style.color=\'#94a3b8\'">↩️ Восстановить</a>
+                    <a href="/archive/restore/{t["id"]}" style="padding:6px 14px;background:rgba(255,255,255,.06);color:#94a3b8;border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:12px;text-decoration:none;white-space:nowrap;transition:all .15s;" onmouseover="this.style.color='white'" onmouseout="this.style.color='#94a3b8'">↩️ Восстановить</a>
                 </div>
             </div>'''
 
@@ -2700,7 +2698,7 @@ async def delete_file_route(request):
     raise web.HTTPFound(f"/attach/{task_id}?back={back}" if task_id else back)
 
 
-# ─── Удаление комментария ────────────────────────────────────────────────────
+# ─── Удаление комментария ─────────────────────────────────────────────────────
 @routes.get("/comment/delete/{comment_id}")
 async def delete_comment_route(request):
     comment_id = int(request.match_info["comment_id"])
@@ -2710,7 +2708,7 @@ async def delete_comment_route(request):
     raise web.HTTPFound(f"/comment/{task_id}?back={back}" if task_id else back)
 
 
-# ─── Загрузка файла через дашборд ───────────────────────────────────────────
+# ─── Загрузка файла через дашборд ─────────────────────────────────────────────
 @routes.post("/file/upload/{task_id}")
 async def upload_file_route(request):
     task_id = int(request.match_info["task_id"])
