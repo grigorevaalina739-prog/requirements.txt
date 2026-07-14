@@ -13,7 +13,9 @@ from database import (add_task, get_tasks, update_status, get_projects,
                       register_user, get_user_by_name, get_conn,
                       add_task_comment, get_task_comments,
                       get_task_history, log_task_change, get_managers,
-                      trash_task, get_trashed_tasks, restore_from_trash)
+                      trash_task, get_trashed_tasks, restore_from_trash,
+                      get_task, get_all_users, complete_task_by_employee,
+                      confirm_task_by_director, return_task_for_rework)
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -44,6 +46,14 @@ class TaskEditing(StatesGroup):
 class TaskCommenting(StatesGroup):
     waiting_for_comment = State()
     waiting_for_file = State()
+
+
+class TaskCompletionReport(StatesGroup):
+    waiting_for_report = State()
+
+
+class ReworkComment(StatesGroup):
+    waiting_for_comment = State()
 
 
 FIELD_LABELS = {
@@ -243,13 +253,17 @@ def edit_task_keyboard(task_id):
     ])
 
 
-def mytask_keyboard(task_id):
-    return InlineKeyboardMarkup(inline_keyboard=[
+def mytask_keyboard(task_id, status=None):
+    buttons = []
+    if status not in ("На проверке", "Выполнена", "Архив", "Корзина"):
+        buttons.append([InlineKeyboardButton(text="✅ Завершить задачу", callback_data=f"empdone_{task_id}")])
+    buttons += [
         [InlineKeyboardButton(text="💬 Написать комментарий", callback_data=f"addcomment_{task_id}")],
         [InlineKeyboardButton(text="📎 Прикрепить файл", callback_data=f"addfile_{task_id}")],
         [InlineKeyboardButton(text="📋 История комментариев", callback_data=f"viewcomments_{task_id}")],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="cancel_task")],
-    ])
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def edit_one_of_multiple_keyboard(task_idx):
@@ -305,12 +319,18 @@ def format_existing_task(t):
 
 
 def format_my_task(t):
+    status = t.get('status') or '—'
+    status_note = ""
+    if status == "На проверке":
+        status_note = "\n⏳ _Ожидает подтверждения директора_"
+    elif status == "На доработке":
+        status_note = "\n↩️ _Возвращена на доработку_"
     return (
         f"📋 *Задача #{t['id']}:*\n\n"
         f"📌 {t.get('title') or '—'}\n"
         f"📁 *Проект:* {t.get('project') or '—'}\n"
         f"📅 *Срок:* {t.get('deadline') or '—'}\n"
-        f"🔵 *Статус:* {t.get('status') or '—'}\n"
+        f"🔵 *Статус:* {status}{status_note}\n"
         f"💬 *Комментарий:* {t.get('comment') or '—'}"
     )
 
@@ -598,10 +618,10 @@ async def cmd_mytasks(message: Message):
         await message.answer(f"📋 У вас нет задач, *{name}*.", parse_mode="Markdown")
         return
     for t in my_tasks[:10]:
-        emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢"}.get(t.get("status", ""), "⚪")
+        emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢", "На проверке": "🟣", "На доработке": "🟠"}.get(t.get("status", ""), "⚪")
         await message.answer(
             f"{emoji} {format_my_task(t)}",
-            reply_markup=mytask_keyboard(t["id"]),
+            reply_markup=mytask_keyboard(t["id"], t.get("status")),
             parse_mode="Markdown"
         )
 
@@ -1341,6 +1361,217 @@ async def cmd_done(message: Message):
     from agent import learn_from_task
     await learn_from_task(task_id)
     await message.answer(f"✅ Задача #{task_id} выполнена! Записано: {author}")
+
+
+# ─── Двухэтапное завершение задачи: сотрудник → проверка директора ─────────
+@router.callback_query(F.data.startswith("empdone_"))
+async def employee_complete_start(callback: CallbackQuery, state: FSMContext):
+    task_id = int(callback.data.replace("empdone_", ""))
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+    if not user:
+        await callback.answer("Вы не зарегистрированы. Напишите /start", show_alert=True)
+        return
+    name = user["name"]
+    task = get_task(task_id)
+    if not task:
+        await callback.answer("Задача не найдена.", show_alert=True)
+        return
+    if not is_my_task(task, name):
+        await callback.answer("Это не ваша задача.", show_alert=True)
+        return
+    if task.get("status") in ("На проверке", "Выполнена", "Архив", "Корзина"):
+        await callback.answer("Задача уже отправлена на проверку или завершена.", show_alert=True)
+        return
+    await state.update_data(completing_task_id=task_id)
+    await state.set_state(TaskCompletionReport.waiting_for_report)
+    await callback.message.answer(
+        f"✅ *Завершение задачи #{task_id}:* {task['title'][:80]}\n\n"
+        f"Напишите комментарий о выполненной работе — можно приложить файл, фото или ссылку одним сообщением:",
+        parse_mode="Markdown"
+    )
+    await callback.answer()
+
+
+@router.message(TaskCompletionReport.waiting_for_report)
+async def employee_complete_save(message: Message, state: FSMContext):
+    data = await state.get_data()
+    task_id = data.get("completing_task_id")
+    if not task_id:
+        await state.clear()
+        return
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
+    author = user["name"] if user else (message.from_user.first_name or "Неизвестно")
+
+    task = get_task(task_id)
+    if not task or task.get("status") in ("На проверке", "Выполнена", "Архив", "Корзина"):
+        await message.answer("⚠️ Задача уже обработана.")
+        await state.clear()
+        return
+
+    file_id = file_name = file_type = ""
+    if message.document:
+        file_id = message.document.file_id
+        file_name = message.document.file_name or "файл"
+        file_type = "document"
+    elif message.photo:
+        file_id = message.photo[-1].file_id
+        file_name = "фото"
+        file_type = "photo"
+    elif message.video:
+        file_id = message.video.file_id
+        file_name = message.video.file_name or "видео"
+        file_type = "video"
+
+    report_text = (message.text or message.caption or "").strip()
+    add_task_comment(
+        task_id=task_id, author=author,
+        text=f"✅ Отчёт о выполнении: {report_text}" if report_text else "✅ Отчёт о выполнении",
+        file_id=file_id, file_name=file_name, file_type=file_type
+    )
+    complete_task_by_employee(task_id, author)
+    await state.clear()
+
+    await message.answer(
+        f"✅ Задача *#{task_id}* отправлена на проверку директору.",
+        parse_mode="Markdown"
+    )
+
+    # Уведомляем директора(ов) — с кнопками подтверждения/возврата
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Подтвердить выполнение", callback_data=f"dirconfirm_{task_id}")],
+        [InlineKeyboardButton(text="↩️ Вернуть на доработку", callback_data=f"dirrework_{task_id}")],
+    ])
+    attach_note = f"\n📎 Приложен файл: {file_name}" if file_id else ""
+    director_text = (
+        f"📋 *Сотрудник завершил задачу и отправил её на проверку*\n\n"
+        f"📌 *Задача:* {task['title']}\n"
+        f"📁 *Проект:* {task.get('project') or '—'}\n"
+        f"👤 *Ответственный:* {author}\n"
+        f"📅 *Дата завершения:* {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+        f"💬 *Комментарий:* {report_text or '—'}"
+        f"{attach_note}"
+    )
+    try:
+        directors = [u for u in get_all_users() if sees_all_tasks(u["name"])]
+    except Exception:
+        directors = []
+    for u in directors:
+        try:
+            if file_id and file_type == "photo":
+                await message.bot.send_photo(u["telegram_id"], file_id, caption=director_text, reply_markup=kb, parse_mode="Markdown")
+            elif file_id and file_type == "video":
+                await message.bot.send_video(u["telegram_id"], file_id, caption=director_text, reply_markup=kb, parse_mode="Markdown")
+            elif file_id:
+                await message.bot.send_document(u["telegram_id"], file_id, caption=director_text, reply_markup=kb, parse_mode="Markdown")
+            else:
+                await message.bot.send_message(u["telegram_id"], director_text, reply_markup=kb, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Ошибка уведомления директора {u['name']}: {e}")
+
+
+@router.callback_query(F.data.startswith("dirconfirm_"))
+async def director_confirm(callback: CallbackQuery):
+    task_id = int(callback.data.replace("dirconfirm_", ""))
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+    name = user["name"] if user else ""
+    if not sees_all_tasks(name):
+        await callback.answer("Только директор может подтверждать выполнение.", show_alert=True)
+        return
+    task = get_task(task_id)
+    if not task or task.get("status") != "На проверке":
+        await callback.answer("Задача уже обработана.", show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+    confirm_task_by_director(task_id, name)
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await callback.answer("Подтверждено")
+    await callback.message.answer(f"✅ Задача #{task_id} подтверждена и перемещена в архив.")
+
+    assignee = task.get("assignee") or ""
+    for nm in [a.strip() for a in assignee.split(",") if a.strip()]:
+        u = get_user_by_name(nm)
+        if u:
+            try:
+                await callback.bot.send_message(
+                    u["telegram_id"],
+                    f"✅ Директор *{name}* подтвердил выполнение задачи *#{task_id}*: {task['title'][:80]}",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Ошибка уведомления сотрудника о подтверждении: {e}")
+
+
+@router.callback_query(F.data.startswith("dirrework_"))
+async def director_rework_start(callback: CallbackQuery, state: FSMContext):
+    task_id = int(callback.data.replace("dirrework_", ""))
+    with get_conn() as conn:
+        user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (callback.from_user.id,)).fetchone()
+    name = user["name"] if user else ""
+    if not sees_all_tasks(name):
+        await callback.answer("Только директор может возвращать задачу на доработку.", show_alert=True)
+        return
+    task = get_task(task_id)
+    if not task or task.get("status") != "На проверке":
+        await callback.answer("Задача уже обработана.", show_alert=True)
+        try:
+            await callback.message.edit_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await state.update_data(rework_task_id=task_id, rework_director=name)
+    await state.set_state(ReworkComment.waiting_for_comment)
+    await callback.message.answer(f"✏️ Укажите комментарий — что нужно доработать в задаче #{task_id} (обязательно):")
+    await callback.answer()
+
+
+@router.message(ReworkComment.waiting_for_comment)
+async def director_rework_save(message: Message, state: FSMContext):
+    data = await state.get_data()
+    task_id = data.get("rework_task_id")
+    director_name = data.get("rework_director", "")
+    comment = (message.text or "").strip()
+    if not task_id:
+        await state.clear()
+        return
+    if not comment:
+        await message.answer("⚠️ Комментарий обязателен. Напишите, что нужно доработать:")
+        return
+    task = get_task(task_id)
+    if not task or task.get("status") != "На проверке":
+        await message.answer("⚠️ Задача уже обработана.")
+        await state.clear()
+        return
+    return_task_for_rework(task_id, comment, director_name)
+    await state.clear()
+    await message.answer(f"↩️ Задача #{task_id} возвращена на доработку.")
+
+    assignee = task.get("assignee") or ""
+    for nm in [a.strip() for a in assignee.split(",") if a.strip()]:
+        u = get_user_by_name(nm)
+        if u:
+            try:
+                await message.bot.send_message(
+                    u["telegram_id"],
+                    f"↩️ *Задача #{task_id} возвращена на доработку*\n\n"
+                    f"📌 {task['title'][:80]}\n\n"
+                    f"💬 *Комментарий директора:* {comment}",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Ошибка уведомления сотрудника о доработке: {e}")
 
 
 # ─── /overdue ────────────────────────────────────────────────────────────────
