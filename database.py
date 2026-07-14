@@ -460,6 +460,20 @@ def init_db():
                 conn.execute("ALTER TABLE meetings ADD COLUMN reminded INTEGER DEFAULT 0")
     except Exception as e:
         print(f"migrate meetings.reminded error: {e}")
+    # Миграция: поля двухэтапного завершения задач (сотрудник -> проверка директора)
+    try:
+        with get_conn() as conn:
+            cols = [r["name"] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()]
+            for col, ddl in (
+                ("completed_by", "ALTER TABLE tasks ADD COLUMN completed_by TEXT DEFAULT ''"),
+                ("completed_at", "ALTER TABLE tasks ADD COLUMN completed_at TEXT DEFAULT ''"),
+                ("confirmed_by", "ALTER TABLE tasks ADD COLUMN confirmed_by TEXT DEFAULT ''"),
+                ("confirmed_at", "ALTER TABLE tasks ADD COLUMN confirmed_at TEXT DEFAULT ''"),
+            ):
+                if col not in cols:
+                    conn.execute(ddl)
+    except Exception as e:
+        print(f"migrate tasks.completion_fields error: {e}")
 
 
 def get_projects():
@@ -704,6 +718,61 @@ def archive_task(task_id: int):
         conn.execute("UPDATE tasks SET status='Архив' WHERE id=?", (task_id,))
     return True
 
+
+def get_task(task_id: int):
+    """Возвращает одну задачу по ID (или None)."""
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        return dict(row) if row else None
+
+
+def complete_task_by_employee(task_id: int, completed_by: str):
+    """Сотрудник отмечает задачу выполненной — статус переходит на проверку директора.
+    Задача НЕ архивируется автоматически — это делает только confirm_task_by_director."""
+    with get_conn() as conn:
+        old = conn.execute("SELECT status FROM tasks WHERE id=?", (task_id,)).fetchone()
+        old_status = old["status"] if old else ""
+        conn.execute(
+            "UPDATE tasks SET status='На проверке', completed_by=?, completed_at=datetime('now') WHERE id=?",
+            (completed_by, task_id)
+        )
+        conn.execute(
+            "INSERT INTO task_history (task_id, changed_by, field, old_value, new_value) VALUES (?,?,?,?,?)",
+            (task_id, completed_by, "status", old_status, "На проверке")
+        )
+    return True
+
+
+def confirm_task_by_director(task_id: int, confirmed_by: str):
+    """Директор подтверждает выполнение — фиксируется, затем задача уходит в архив."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE tasks SET status='Выполнена', confirmed_by=?, confirmed_at=datetime('now') WHERE id=?",
+            (confirmed_by, task_id)
+        )
+        conn.execute(
+            "INSERT INTO task_history (task_id, changed_by, field, old_value, new_value) VALUES (?,?,?,?,?)",
+            (task_id, confirmed_by, "status", "На проверке", "Выполнена")
+        )
+    archive_task(task_id)
+    return True
+
+
+def return_task_for_rework(task_id: int, comment: str, returned_by: str):
+    """Директор возвращает задачу на доработку — задача НЕ архивируется,
+    предыдущие комментарии и файлы остаются в истории задачи."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE tasks SET status='На доработке', completed_by='', completed_at='' WHERE id=?",
+            (task_id,)
+        )
+        conn.execute(
+            "INSERT INTO task_history (task_id, changed_by, field, old_value, new_value) VALUES (?,?,?,?,?)",
+            (task_id, returned_by, "status", "На проверке", "На доработке")
+        )
+    add_task_comment(task_id=task_id, author=returned_by, text=f"↩️ Возврат на доработку: {comment}")
+    return True
+
 def get_archived_tasks(project=None):
     """Возвращает архивные задачи."""
     with get_conn() as conn:
@@ -778,7 +847,7 @@ DEFAULT_MANAGERS = [
 
 
 def seed_managers():
-    """Заполняет таблицу managers начальным списком, если она пустая."""
+    """Заполняет таблицу managers начальным списком, если она пуста."""
     with get_conn() as conn:
         row = conn.execute("SELECT COUNT(*) AS c FROM managers").fetchone()
         if row["c"] == 0:
@@ -797,7 +866,7 @@ def get_managers():
 
 
 def add_manager(name: str) -> bool:
-    """Добавляет сотрудника. Возвращает True если добавлен, False если уже существует или имя пустое."""
+    """Добавляет сотрудника. Возвращает True если добавлен, False если уже существует или имя пусто."""
     name = (name or "").strip()
     if not name:
         return False
