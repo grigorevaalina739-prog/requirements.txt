@@ -78,7 +78,7 @@ def task_row(t, project_filter="", status_filter=""):
         comment_html = '<span style="color:#CBD5E1;">—</span>'
 
     pc = get_project_color(t["project"])
-    project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;'>{t['project']}</span>"
+    project_badge = f"<span style='background:{pc['bg']};color:{pc['text']};padding:3px 6px;border-radius:14px;font-size:10px;font-weight:600;white-space:nowrap;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;'>{t['project']}</span>"
 
     if t["status"] == "Выполнена":
         deadline_html = f'<span style="color:#94A3B8;font-size:13px;">{t["deadline"] or "—"}</span>'
@@ -87,19 +87,24 @@ def task_row(t, project_filter="", status_filter=""):
 
     assignee = t.get("assignee") or ""
     if assignee and assignee != "—":
-        parts = assignee.split()
-        initials = (parts[0][0] if parts else "?") + (parts[1][0] if len(parts) > 1 else "")
+        names = [n.strip() for n in assignee.split(",") if n.strip()]
         av_colors = ["#3B82F6","#8B5CF6","#10B981","#F59E0B","#EF4444","#06B6D4","#EC4899"]
-        av_color = av_colors[sum(ord(c) for c in assignee) % len(av_colors)]
-        av_bg = av_color + "20"
-        assignee_html = (
-            '<div style="display:flex;align-items:center;gap:8px;">'
-            f'<div style="width:28px;height:28px;border-radius:50%;background:{av_bg};color:{av_color};'
-            f'font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">{initials}</div>'
-            f'<span style="font-size:13px;color:#334155;">{assignee}</span></div>'
-        )
+        def _av_row(name):
+            parts = name.split()
+            initials = (parts[0][0] if parts else "?") + (parts[1][0] if len(parts) > 1 else "")
+            color = av_colors[sum(ord(c) for c in name) % len(av_colors)]
+            bg = color + "20"
+            return (
+                f'<div style="display:flex;align-items:center;gap:5px;">'
+                f'<div style="width:20px;height:20px;border-radius:50%;background:{bg};color:{color};'
+                f'font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">{initials}</div>'
+                f'<span style="font-size:12px;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px;">{name}</span></div>'
+            )
+        assignee_html = '<div style="display:flex;flex-direction:column;gap:3px;">' + "".join(_av_row(n) for n in names) + '</div>'
     else:
         assignee_html = '<span style="color:#CBD5E1;">—</span>'
+
+    created_str = (t.get("created_at") or "")[:10]
 
     back_url = f"/?project={project_filter}&status={status_filter}"
     row_border = "border-left:3px solid #e05c5c;" if overdue else "border-left:3px solid transparent;"
@@ -156,17 +161,18 @@ def task_row(t, project_filter="", status_filter=""):
         f'onmouseenter="this.querySelector(\'.row-actions-wrap\').style.opacity=\'1\';this.style.background=\'#f0f7ff\';" '
         f'onmouseleave="this.querySelector(\'.row-actions-wrap\').style.opacity=\'0\';this.style.background=\'white\';">'
         f'<td style="padding:14px 12px;color:#64748b;font-size:12px;font-weight:700;white-space:nowrap;">#{tid}</td>'
-        f'<td style="padding:14px 16px;min-width:360px;max-width:500px;">'
+        f'<td style="padding:14px 16px;min-width:320px;max-width:420px;">'
         f'<div style="font-weight:600;font-size:14px;color:#0f172a;line-height:1.5;letter-spacing:-.1px;">{t["title"]}</div>'
         f'</td>'
-        f'<td style="padding:14px 12px;white-space:nowrap;">{assignee_html}</td>'
-        f'<td style="padding:14px 12px;white-space:nowrap;">{project_badge}</td>'
-        f'<td style="padding:14px 12px;min-width:140px;">{deadline_html}</td>'
+        f'<td style="padding:14px 8px;width:96px;max-width:96px;">{assignee_html}</td>'
+        f'<td style="padding:14px 6px;width:76px;max-width:76px;overflow:hidden;">{project_badge}</td>'
+        f'<td style="padding:14px 8px;color:#64748b;font-size:11px;white-space:nowrap;">{created_str}</td>'
+        f'<td style="padding:14px 12px;min-width:130px;">{deadline_html}</td>'
         f'<td style="padding:14px 12px;white-space:nowrap;">'
         f'<span style="display:inline-flex;align-items:center;gap:6px;background:{sc_bg};color:{sc_color};padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;">'
         f'<span style="width:6px;height:6px;border-radius:50%;background:{sc_color};flex-shrink:0;"></span>'
         f'{t["status"]}{" ✔" if t["status"] == "На проверке" else ""}</span></td>'
-        f'<td style="padding:14px 8px;font-size:12px;min-width:80px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{comment_html}</td>'
+        f'<td style="padding:14px 12px;font-size:12px;min-width:220px;max-width:360px;white-space:normal;word-break:break-word;">{comment_html}</td>'
         f'<td class="row-actions" style="padding:14px 12px;white-space:nowrap;">{actions_html}</td>'
         f'</tr>'
     )
@@ -393,7 +399,7 @@ async def dashboard(request):
     if not upcoming_html:
         upcoming_html = '<div style="font-size:12px;color:var(--muted);">Нет предстоящих дедлайнов</div>'
     pill_all_class = "pill pill-active" if not selected else "pill"
-    empty_row = '<tr><td colspan="8"><div class="empty-state"><div style="font-size:40px;margin-bottom:12px;">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'
+    empty_row = '<tr><td colspan="9"><div class="empty-state"><div style="font-size:40px;margin-bottom:12px;">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'
     health_label = "Отлично" if health >= 90 else ("Хорошо" if health >= 70 else "Под угрозой")
     health_c = "#10B981" if health >= 80 else ("#F59E0B" if health >= 60 else "#EF4444")
 
@@ -697,7 +703,7 @@ async def dashboard(request):
     )
 
     # table
-    table_body = rows if rows else '<tr><td colspan="8"><div class="empty-st"><div style="font-size:36px;margin-bottom:10px;">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'
+    table_body = rows if rows else '<tr><td colspan="9"><div class="empty-st"><div style="font-size:36px;margin-bottom:10px;">📭</div><p>Нет задач по выбранным фильтрам</p></div></td></tr>'
 
     def th(label, col=None):
         if col:
@@ -710,7 +716,7 @@ async def dashboard(request):
     thead_row = (
         "<thead><tr>"
         + th("ID","id") + th("Задача") + th("Ответственный","assignee")
-        + th("Проект") + th("Срок","deadline") + th("Статус","status")
+        + th("Проект") + th("Дата пост.") + th("Срок","deadline") + th("Статус","status")
         + th("Коммент.") + th("Действия")
         + "</tr></thead>"
     )
