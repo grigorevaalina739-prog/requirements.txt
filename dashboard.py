@@ -60,6 +60,8 @@ def task_row(t, project_filter="", status_filter=""):
         "В работе":        ("#D97706", "#FFFBEB"),
         "Выполнена":       ("#059669", "#ECFDF5"),
         "На согласовании": ("#EA580C", "#FFF7ED"),
+        "На проверке":     ("#7C3AED", "#F5F3FF"),
+        "На доработке":    ("#EA580C", "#FFF7ED"),
         "Просрочена":      ("#DC2626", "#FEF2F2"),
         "Заблокирована":   ("#374151", "#F3F4F6"),
     }
@@ -163,7 +165,7 @@ def task_row(t, project_filter="", status_filter=""):
         f'<td style="padding:14px 12px;white-space:nowrap;">'
         f'<span style="display:inline-flex;align-items:center;gap:6px;background:{sc_bg};color:{sc_color};padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;">'
         f'<span style="width:6px;height:6px;border-radius:50%;background:{sc_color};flex-shrink:0;"></span>'
-        f'{t["status"]}</span></td>'
+        f'{t["status"]}{" ✔" if t["status"] == "На проверке" else ""}</span></td>'
         f'<td style="padding:14px 8px;font-size:12px;min-width:80px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{comment_html}</td>'
         f'<td class="row-actions" style="padding:14px 12px;white-space:nowrap;">{actions_html}</td>'
         f'</tr>'
@@ -232,7 +234,7 @@ async def dashboard(request):
 
     status_options = "".join(
         f'<option value="{s}" {"selected" if s==status_filter else ""}>{s}</option>'
-        for s in ["Открыта", "В работе", "Выполнена", "На согласовании", "Просрочена", "Заблокирована"]
+        for s in ["Открыта", "В работе", "Выполнена", "На согласовании", "На проверке", "На доработке", "Просрочена", "Заблокирована"]
     )
     rows = "".join(task_row(t, selected, status_filter) for t in tasks)
     search_value = search_query
@@ -1259,7 +1261,7 @@ function addMsg(role, html){
   const chat = document.getElementById('chat');
   const div = document.createElement('div');
   div.className = 'msg ' + role;
-  const av = role==='user' ? '<div class=\"av\" style=\"background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;font-size:11px;font-weight:700;\">\u0412\u042b</div>' : '<div class=\"av\">\ud83e\udd16</div>';
+  const av = role==='user' ? '<div class=\"av\" style=\"background:linear-gradient(135deg,#ff6b6b,#e83232);color:white;font-size:11px;font-weight:700;\">ВЫ</div>' : '<div class=\"av\">🤖</div>';
   div.innerHTML = av + `<div class=\"bubble\">${html}</div>`;
   chat.appendChild(div);
   chat.scrollTop = 99999;
@@ -1279,42 +1281,42 @@ function showTyping(){
   const chat = document.getElementById('chat');
   const d = document.createElement('div');
   d.className = 'msg ai'; d.id = 'typing';
-  d.innerHTML = '<div class=\"av\">\ud83e\udd16</div><div class=\"typing-dots\"><span></span><span></span><span></span></div>';
+  d.innerHTML = '<div class=\"av\">🤖</div><div class=\"typing-dots\"><span></span><span></span><span></span></div>';
   chat.appendChild(d); chat.scrollTop = 99999;
 }
 function hideTyping(){const t=document.getElementById('typing');if(t)t.remove();}
 
 function renderCard(task, idx=''){
   const projectBadge = task._project_predicted
-    ? `<span class=\"tc-badge predicted\">\ud83c\udfaf \u041f\u0440\u0435\u0434\u0441\u043a\u0430\u0437\u0430\u043d\u043e</span>`
-    : (task.project ? `<span class=\"tc-badge\">\u2713 \u041e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d</span>` : `<span class=\"tc-badge\" style=\"background:#fef2f2;color:#dc2626;\">\u26a0\ufe0f \u041d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d</span>`);
+    ? `<span class=\"tc-badge predicted\">🎯 Предсказано</span>`
+    : (task.project ? `<span class=\"tc-badge\">✓ Определён</span>` : `<span class=\"tc-badge\" style=\"background:#fef2f2;color:#dc2626;\">⚠️ Не определён</span>`);
 
-  const fv = (val, fallback='\u2014') => val ? `<span class=\"field-val\">${val}</span>` : `<span class=\"field-val missing\">${fallback}</span>`;
+  const fv = (val, fallback='—') => val ? `<span class=\"field-val\">${val}</span>` : `<span class=\"field-val missing\">${fallback}</span>`;
 
   return `<div class=\"task-card\" id=\"card${idx}\">
-    <div class=\"tc-head\"><h3>\ud83d\udccb \u0417\u0430\u0434\u0430\u0447\u0430 \u0440\u0430\u0441\u043f\u043e\u0437\u043d\u0430\u043d\u0430</h3>${projectBadge}</div>
-    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udccc</span><span class=\"field-label\">\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435</span>${fv(task.title,'\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d\u043e')}</div>
-    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udc64</span><span class=\"field-label\">\u041e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439</span>${fv(task.assignee,'\u041d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d \u2014 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435')}</div>
-    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udcc1</span><span class=\"field-label\">\u041f\u0440\u043e\u0435\u043a\u0442</span>${fv(task.project,'\u041d\u0435 \u043e\u043f\u0440\u0435\u0434\u0435\u043b\u0451\u043d \u2014 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435')}</div>
-    <div class=\"field-row\"><span class=\"field-icon\">\ud83d\udcc5</span><span class=\"field-label\">\u0421\u0440\u043e\u043a</span>${fv(task.deadline,'\u041d\u0435 \u0443\u043a\u0430\u0437\u0430\u043d')}</div>
-    ${task.description && task.description !== task.title ? `<div class=\"field-row\"><span class=\"field-icon\">\ud83d\udcac</span><span class=\"field-label\">\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435</span><span class=\"field-val\" style=\"font-size:12px;color:#64748b;\">${task.description}</span></div>` : ''}
+    <div class=\"tc-head\"><h3>📋 Задача распознана</h3>${projectBadge}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">📌</span><span class=\"field-label\">Название</span>${fv(task.title,'Не указано')}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">👤</span><span class=\"field-label\">Ответственный</span>${fv(task.assignee,'Не определён — выберите')}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">📁</span><span class=\"field-label\">Проект</span>${fv(task.project,'Не определён — выберите')}</div>
+    <div class=\"field-row\"><span class=\"field-icon\">📅</span><span class=\"field-label\">Срок</span>${fv(task.deadline,'Не указан')}</div>
+    ${task.description && task.description !== task.title ? `<div class=\"field-row\"><span class=\"field-icon\">💬</span><span class=\"field-label\">Описание</span><span class=\"field-val\" style=\"font-size:12px;color:#64748b;\">${task.description}</span></div>` : ''}
     <div class=\"tc-actions\">
-      <button class=\"btn btn-ok\" onclick=\"confirm_${idx}()\">\u2705 \u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0437\u0430\u0434\u0430\u0447\u0443</button>
-      <button class=\"btn btn-edit\" onclick=\"toggleEdit('edit${idx}')\">\u270f\ufe0f \u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c</button>
-      <button class=\"btn btn-cancel\" onclick=\"cancelCard('card${idx}')\">\u2715</button>
+      <button class=\"btn btn-ok\" onclick=\"confirm_${idx}()\">✅ Создать задачу</button>
+      <button class=\"btn btn-edit\" onclick=\"toggleEdit('edit${idx}')\">✏️ Изменить</button>
+      <button class=\"btn btn-cancel\" onclick=\"cancelCard('card${idx}')\">✕</button>
     </div>
     <div class=\"edit-panel\" id=\"edit${idx}\">
-      <div class=\"ep-row\"><label>\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0437\u0430\u0434\u0430\u0447\u0438</label><textarea id=\"et_title${idx}\">${task.title||''}</textarea></div>
-      <div class=\"ep-row\"><label>\u041e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435 (\u043c\u043e\u0436\u043d\u043e \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e)</label>
+      <div class=\"ep-row\"><label>Название задачи</label><textarea id=\"et_title${idx}\">${task.title||''}</textarea></div>
+      <div class=\"ep-row\"><label>Ответственные (можно несколько)</label>
         <div class=\"ep-assignees\" id=\"et_assignee${idx}\">
         ${MANAGERS.map(m=>{const sel=(task.assignee||'').split(',').map(x=>x.trim()).includes(m);return `<label class=\"ep-chk\"><input type=\"checkbox\" value=\"${m}\"${sel?' checked':''}> ${m}</label>`}).join('')}
         </div></div>
-      <div class=\"ep-row\"><label>\u041f\u0440\u043e\u0435\u043a\u0442</label>
-        <select id=\"et_project${idx}\"><option value=\"\">\u2014 \u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u2014</option>
+      <div class=\"ep-row\"><label>Проект</label>
+        <select id=\"et_project${idx}\"><option value=\"\">— Выберите —</option>
         ${PROJECTS.map(p=>`<option value=\"${p}\"${p===task.project?' selected':''}>${p}</option>`).join('')}
         </select></div>
-      <div class=\"ep-row\"><label>\u0421\u0440\u043e\u043a</label><input type=\"date\" id=\"et_deadline${idx}\" value=\"${task.deadline||''}\"></div>
-      <button class=\"ep-save\" onclick=\"saveEdit('${idx}')\">\ud83d\udcbe \u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c</button>
+      <div class=\"ep-row\"><label>Срок</label><input type=\"date\" id=\"et_deadline${idx}\" value=\"${task.deadline||''}\"></div>
+      <button class=\"ep-save\" onclick=\"saveEdit('${idx}')\">💾 Сохранить</button>
     </div>
   </div>`;
 }
@@ -1325,7 +1327,7 @@ function cancelCard(id){
   const el = document.getElementById(id);
   if(el) el.closest('div').remove();
   pendingTask = null;
-  addMsg('ai','\u041e\u0442\u043c\u0435\u043d\u0435\u043d\u043e. \u041e\u043f\u0438\u0448\u0438\u0442\u0435 \u043d\u043e\u0432\u0443\u044e \u0437\u0430\u0434\u0430\u0447\u0443.');
+  addMsg('ai','Отменено. Опишите новую задачу.');
 }
 
 function saveEdit(idx){
@@ -1340,7 +1342,7 @@ function saveEdit(idx){
   if(card) card.outerHTML = renderCard(pendingTask, idx);
   // Re-register confirm function
   window['confirm_'+idx] = () => createTask(pendingTask, idx);
-  addMsg('ai','\u2705 \u0414\u0430\u043d\u043d\u044b\u0435 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u044b!');
+  addMsg('ai','✅ Данные обновлены!');
 }
 
 async function createTask(task, idx){
@@ -1358,7 +1360,7 @@ async function createTask(task, idx){
     // Success banner
     const banner = document.createElement('div');
     banner.className = 'success-banner';
-    banner.innerHTML = `<div class=\"s-icon\">\ud83c\udf89</div><div class=\"s-text\"><b>\u0417\u0430\u0434\u0430\u0447\u0430 #${d.task_id} \u0441\u043e\u0437\u0434\u0430\u043d\u0430!</b>${task.title} \u2192 ${task.assignee||'\u2014'} \u00b7 ${task.project||'\u2014'} \u00b7 ${task.deadline||'\u0431\u0435\u0437 \u0441\u0440\u043e\u043a\u0430'}</div><a href=\"/\">\u041e\u0442\u043a\u0440\u044b\u0442\u044c</a>`;
+    banner.innerHTML = `<div class=\"s-icon\">🎉</div><div class=\"s-text\"><b>Задача #${d.task_id} создана!</b>${task.title} → ${task.assignee||'—'} · ${task.project||'—'} · ${task.deadline||'без срока'}</div><a href=\"/\">Открыть</a>`;
     addElement(banner);
 
     // Add to history
@@ -1366,9 +1368,9 @@ async function createTask(task, idx){
     updateHistory();
     pendingTask = null;
 
-    addMsg('ai', `\u0413\u043e\u0442\u043e\u0432\u043e! \u0417\u0430\u0434\u0430\u0447\u0430 \u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0430. \u0425\u043e\u0442\u0438\u0442\u0435 \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0435\u0449\u0451 \u043e\u0434\u043d\u0443?`);
+    addMsg('ai', `Готово! Задача поставлена. Хотите добавить ещё одну?`);
   } catch(e){
-    addMsg('ai','\u274c \u041e\u0448\u0438\u0431\u043a\u0430 \u043f\u0440\u0438 \u0441\u043e\u0437\u0434\u0430\u043d\u0438\u0438. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0435\u0449\u0451 \u0440\u0430\u0437.');
+    addMsg('ai','❌ Ошибка при создании. Попробуйте ещё раз.');
     if(btn) btn.disabled = false;
   }
 }
@@ -1376,13 +1378,13 @@ async function createTask(task, idx){
 function updateHistory(){
   const list = document.getElementById('historyList');
   if(!sessionTasks.length){
-    list.innerHTML = '<div style=\"font-size:12px;color:#cbd5e1;text-align:center;padding:16px;\">\u0415\u0449\u0451 \u043d\u0435\u0442 \u0437\u0430\u0434\u0430\u0447</div>';
+    list.innerHTML = '<div style=\"font-size:12px;color:#cbd5e1;text-align:center;padding:16px;\">Ещё нет задач</div>';
     return;
   }
   list.innerHTML = sessionTasks.slice().reverse().map(t => `
     <div class=\"hist-item\">
       <div class=\"h-title\">${t.title}</div>
-      <div class=\"h-meta\">\ud83d\udc64 ${t.assignee||'\u2014'} \u00b7 #${t.id}</div>
+      <div class=\"h-meta\">👤 ${t.assignee||'—'} · #${t.id}</div>
     </div>`).join('');
 }
 
@@ -1672,7 +1674,7 @@ async def edit_task_page(request):
     )
     status_options = "".join(
         f'<option value="{s}" {"selected" if s == task["status"] else ""}>{s}</option>'
-        for s in ["Открыта", "В работе", "Выполнена", "На согласовании", "Просрочена", "Заблокирована"]
+        for s in ["Открыта", "В работе", "Выполнена", "На согласовании", "На проверке", "На доработке", "Просрочена", "Заблокирована"]
     )
     current_assignees = [a.strip() for a in (task["assignee"] or "").split(",") if a.strip()]
     assignee_checkboxes = "".join(
@@ -2616,13 +2618,14 @@ async def archive_page(request):
             initials = (parts[0][0] if parts else "?") + (parts[1][0] if len(parts) > 1 else "")
             av_colors = ["#3B82F6","#8B5CF6","#10B981","#F59E0B","#EF4444","#06B6D4"]
             av_color = av_colors[sum(ord(c) for c in (t.get("assignee") or "a")) % len(av_colors)]
+            done_badge = "✅✅ Подтверждено директором" if t.get("confirmed_by") else "✅ Выполнена"
 
             rows += f'''<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 20px;margin-bottom:10px;">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
                             <span style="font-size:11px;color:#64748b;font-weight:700;">#{t["id"]}</span>
-                            <span style="background:#ECFDF5;color:#059669;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">✅ Выполнена</span>
+                            <span style="background:#ECFDF5;color:#059669;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">{done_badge}</span>
                         </div>
                         <div style="font-size:14px;font-weight:500;color:#e2e8f0;margin-bottom:6px;">{t["title"]}</div>
                         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
