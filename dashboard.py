@@ -664,6 +664,7 @@ async def dashboard(request):
         "<a href=\"/agent\" class=\"tb-btn tb-blue\">🤖 Агент</a>"
         "<a href=\"/calendar\" class=\"tb-btn tb-ghost\">📅 Календарь</a>"
         "<a href=\"/managers\" class=\"tb-btn tb-ghost\">👥 Сотрудники</a>"
+        "<a href=\"/file-archive\" class=\"tb-btn tb-ghost\">📁 Архив файлов</a>"
         "<a href=\"/archive\" class=\"tb-btn tb-ghost\">📦 Архив</a>"
         "<a href=\"/trash\" class=\"tb-btn tb-ghost\">🗑 Корзина</a>"
         "<button class=\"tb-btn tb-ghost\" onclick=\"openCmd()\" title=\"Ctrl+K\">⌘K</button>"
@@ -2490,7 +2491,116 @@ async def do_restore_task(request):
     raise web.HTTPFound("/archive")
 
 
-# ─── Корзина задач ─────────────────────────────────────────────────────────
+# ─── Архив файлов ────────────────────────────────────────────────────────────
+@routes.get("/file-archive")
+async def file_archive_page(request):
+    """Страница с архивом всех загруженных файлов, организованных по проектам и задачам"""
+    tasks = get_tasks()
+    
+    # Собираем файлы по структуре: project -> task -> files
+    archive = {}
+    for task in tasks:
+        project = task.get("project") or "Без проекта"
+        task_id = task["id"]
+        task_title = task.get("title", "Без названия")
+        
+        if project not in archive:
+            archive[project] = {}
+        
+        # Получаем комментарии с файлами для этой задачи
+        comments = get_task_comments(task_id)
+        files = [c for c in comments if c.get("file_id")]
+        
+        if files:
+            archive[project][task_id] = {
+                "title": task_title,
+                "files": files
+            }
+    
+    # Строим HTML
+    rows = []
+    if not archive or all(not v for v in archive.values()):
+        rows.append('<div style="text-align:center;padding:48px;color:#94A3B8;">Файлы не загружены</div>')
+    else:
+        for project_name in sorted(archive.keys()):
+            tasks_dict = archive[project_name]
+            if not tasks_dict:
+                continue
+            
+            rows.append(f'<div style="margin-bottom:24px;">')
+            rows.append(f'<h3 style="font-size:16px;font-weight:700;color:#0f172a;margin-bottom:12px;padding:0 14px;">📁 {project_name}</h3>')
+            
+            for task_id in sorted(tasks_dict.keys()):
+                task_info = tasks_dict[task_id]
+                rows.append(f'<div style="background:white;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;margin-left:14px;margin-right:14px;overflow:hidden;">')
+                rows.append(f'<div style="background:#f8fafc;padding:12px 14px;border-bottom:1px solid #e2e8f0;">')
+                rows.append(f'<span style="font-size:13px;font-weight:600;color:#0f172a;">#{task_id} {task_info["title"][:60]}</span>')
+                rows.append(f'</div>')
+                rows.append(f'<div style="padding:10px 14px;">')
+                
+                for f in task_info["files"]:
+                    file_id = f.get("file_id", "")
+                    file_name = f.get("file_name", "файл")
+                    author = f.get("author", "—")
+                    created_at = (f.get("created_at") or "")[:10]
+                    text = f.get("text", "")
+                    
+                    rows.append(f'<div style="padding:8px 0;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">')
+                    rows.append(f'<div style="flex:1;">')
+                    rows.append(f'<a href="/file/{file_id}?name={file_name}" style="color:#3B82F6;text-decoration:underline;font-size:13px;font-weight:500;">⬇️ {file_name}</a>')
+                    if text:
+                        rows.append(f'<div style="font-size:12px;color:#64748b;margin-top:3px;">{text[:80]}</div>')
+                    rows.append(f'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">👤 {author} • {created_at}</div>')
+                    rows.append(f'</div>')
+                    rows.append(f'</div>')
+                
+                rows.append(f'</div>')
+                rows.append(f'</div>')
+            
+            rows.append(f'</div>')
+    
+    html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Архив файлов — MINISO</title>
+<style>
+* {{box-sizing:border-box;margin:0;padding:0;}}
+body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4fa;color:#0f172a;}}
+.topbar {{background:linear-gradient(160deg,#ffb3b3 0%,#ff6b6b 45%,#e83232 100%);padding:0 32px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}}
+.topbar a {{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;border:1px solid rgba(255,255,255,.55);color:white;background:rgba(255,255,255,.18);transition:all .2s;}}
+.topbar a:hover {{color:#cc2222;background:white;border-color:white;}}
+.logo {{width:32px;height:32px;background:linear-gradient(135deg,#4f8ef7,#8b78f0);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}}
+.topbar-brand {{display:flex;align-items:center;gap:12px;}}
+.topbar-brand h1 {{font-size:14px;font-weight:700;color:#0f172a;}}
+.content {{padding:32px;max-width:1200px;margin:0 auto;}}
+.content h1 {{font-size:28px;font-weight:800;margin-bottom:24px;}}
+@media(max-width:680px) {{
+  .topbar {{padding:0 14px;height:56px;}}
+  .topbar a {{padding:6px 10px;font-size:11px;}}
+  .content {{padding:14px;}}
+  .content h1 {{font-size:20px;}}
+}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="logo">📋</div>
+    <h1>MINISO</h1>
+  </div>
+  <div>
+    <a href="/">← Вернуться</a>
+  </div>
+</div>
+<div class="content">
+  <h1>📁 Архив файлов</h1>
+  {''.join(rows)}
+</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html; charset=utf-8")
 @routes.get("/report")
 async def report_page(request):
     tasks = get_tasks()  # без архива и корзины, включая выполненные
