@@ -483,19 +483,23 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext):
         all_tasks = get_tasks()
         if sees_all_tasks(name):
             my_tasks = [t for t in all_tasks if t.get("status") != "Выполнена"]
-            header = "📋 *Все активные задачи:*\n"
+            header = "📋 *Все активные задачи*"
         else:
             my_tasks = [t for t in all_tasks if is_my_task(t, name)
                         and t.get("status") != "Выполнена"]
-            header = f"📋 *Ваши задачи, {name}:*\n"
+            header = f"📋 *Ваши задачи, {name}*"
         if not my_tasks:
             await callback.message.answer("✅ Активных задач нет!")
             return
-        lines = [header]
-        for t in my_tasks:
-            status_icon = {"Открыта": "🔵", "В работе": "🟡", "Просрочена": "🔴", "На согласовании": "🟠"}.get(t["status"], "⚪")
-            lines.append(f"{status_icon} *#{t['id']}* {t['title'][:50]}\n   📅 {t.get('deadline') or '—'} | /done {t['id']}")
-        await callback.message.answer("\n".join(lines), parse_mode="Markdown")
+        # Отправляем каждую задачу отдельным сообщением с кнопками
+        await callback.message.answer(f"{header}:")
+        for t in my_tasks[:10]:
+            emoji = {"Открыта": "🔵", "В работе": "🟡", "Выполнена": "🟢", "На проверке": "🟣", "На доработке": "🟠"}.get(t.get("status", ""), "⚪")
+            await callback.message.answer(
+                f"{emoji} {format_my_task(t)}",
+                reply_markup=mytask_keyboard(t["id"], t.get("status")),
+                parse_mode="Markdown"
+            )
     elif action == "dashboard":
         from config import RAILWAY_PUBLIC_DOMAIN
         url = f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else "Дашборд недоступен"
