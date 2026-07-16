@@ -494,11 +494,13 @@ def add_project(name):
 
 
 def delete_empty_projects():
-    """Удалить пустые проекты из БД"""
+    """Удалить пустые проекты из БД, но не трогать задачи (они останутся с пустым project)"""
     try:
         with get_conn() as conn:
-            # Удаляем проекты с пустым или None именем
+            # Удаляем только сам проект с пустым или None именем
+            # Задачи не удаляются - они останутся с пустым полем project
             conn.execute("DELETE FROM projects WHERE name IS NULL OR name = ''")
+            logger.info("Очищены пустые проекты (задачи сохранены)")
             return True
     except Exception as e:
         logger.error(f"Ошибка удаления пустых проектов: {e}")
