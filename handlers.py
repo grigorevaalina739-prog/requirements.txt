@@ -578,18 +578,44 @@ async def cmd_dashboard(message: Message):
 # ─── /register ─────────────────────────────────────────────────────────────
 @router.message(Command("register"))
 async def cmd_register(message: Message):
+    """Регистрация всегда через выбор фамилии из списка сотрудников —
+    это гарантирует связку с задачами, даже если в Telegram у человека
+    указано другое имя/ник."""
+    managers = get_managers()
     parts = message.text.split(maxsplit=1)
-    if len(parts) >= 2:
-        name = parts[1].strip()
-    else:
-        name = " ".join(filter(None, [message.from_user.first_name, message.from_user.last_name]))
-        if not name:
-            name = message.from_user.username or f"user_{message.from_user.id}"
-    register_user(message.from_user.id, name)
+    typed = parts[1].strip() if len(parts) >= 2 else ""
+
+    # Если ввели текст — пробуем сопоставить его с реальным сотрудником по фамилии
+    if typed:
+        typed_l = typed.lower()
+        typed_surname = typed_l.split()[0] if typed_l.split() else ""
+        match = None
+        for m in managers:
+            m_l = m.lower()
+            if typed_l in m_l or m_l in typed_l or (typed_surname and typed_surname == m_l.split()[0]):
+                match = m
+                break
+        if match:
+            register_user(message.from_user.id, match)
+            await message.answer(
+                f"✅ Зарегистрированы как *{match}*!\n"
+                f"Уведомления будут приходить сюда.",
+                parse_mode="Markdown"
+            )
+            return
+        # Совпадения нет — не сохраняем произвольный текст, просим выбрать кнопкой
+        await message.answer(
+            f"⚠️ Не нашёл сотрудника «{typed}» в списке.\n"
+            f"Пожалуйста, выберите свою фамилию из списка ниже:"
+        )
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=name, callback_data=f"reg_{i}")]
+        for i, name in enumerate(managers)
+    ])
     await message.answer(
-        f"✅ Зарегистрированы как *{name}*!\n"
-        f"Уведомления будут приходить сюда.",
-        parse_mode="Markdown"
+        "👤 Выберите своё имя из списка чтобы зарегистрироваться:",
+        reply_markup=keyboard
     )
 
 
@@ -1636,14 +1662,21 @@ async def universal_task_creator(message: Message, state: FSMContext):
         # Если есть активный FSM — не перехватываем
         return
 
-    # Автореагистрация если ещё не зарегистрирован
+    # Если ещё не зарегистрирован — не авторегистрируем под именем из Telegram-профиля
+    # (это ломает связку с задачами). Просим выбрать фамилию из списка.
     with get_conn() as conn:
         user = conn.execute("SELECT * FROM users WHERE telegram_id=?", (message.from_user.id,)).fetchone()
     if not user:
-        tg_name = " ".join(filter(None, [message.from_user.first_name, message.from_user.last_name]))
-        if not tg_name:
-            tg_name = message.from_user.username or f"user_{message.from_user.id}"
-        register_user(message.from_user.id, tg_name)
+        managers = get_managers()
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=name, callback_data=f"reg_{i}")]
+            for i, name in enumerate(managers)
+        ])
+        await message.answer(
+            "👤 Сначала нужно зарегистрироваться.\nВыберите своё имя из списка:",
+            reply_markup=keyboard
+        )
+        return
 
     # Парсим задачу через AI
     thinking_msg = await message.answer("🤖 Распознаю задачу...")
