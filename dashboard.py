@@ -2,9 +2,53 @@
 Веб-дашборд на aiohttp — показывает задачи по проектам.
 """
 from aiohttp import web, ClientSession
-from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task, delete_task_comment, predict_project, learn_project_from_task, get_managers, add_manager, delete_manager, trash_task, get_trashed_tasks, restore_from_trash, delete_task_permanently
+from database import get_tasks, get_projects, get_stats, update_status, get_task_comments, add_task_comment, get_task_history, log_task_change, get_meetings, add_meeting, delete_meeting, update_meeting, add_task, archive_task, get_archived_tasks, restore_task, delete_task_comment, predict_project, learn_project_from_task, get_managers, add_manager, delete_manager, trash_task, get_trashed_tasks, restore_from_trash, delete_task_permanently, get_user_by_name, get_conn, confirm_task_by_director
 from datetime import datetime, date
 from config import BOT_TOKEN
+from aiogram import Bot
+import logging
+
+logger = logging.getLogger(__name__)
+bot = Bot(token=BOT_TOKEN) if BOT_TOKEN else None
+
+async def notify_task_in_progress(task_id: int, author: str):
+    """Отправить уведомление сотруднику, что задача отправлена на проверку директору"""
+    try:
+        task = get_task(task_id)
+        if not task:
+            return
+        assignees = [a.strip() for a in (task.get("assignee") or "").split(",") if a.strip()]
+        for assignee_name in assignees:
+            user = get_user_by_name(assignee_name)
+            if user and bot:
+                await bot.send_message(
+                    user["telegram_id"],
+                    f"📋 *Задача #{task_id} отправлена на проверку директору*\n\n"
+                    f"📌 {task['title']}\n"
+                    f"👤 Отправил: {author}",
+                    parse_mode="Markdown"
+                )
+    except Exception as e:
+        logger.error(f"Ошибка уведомления в дашборде: {e}")
+
+async def notify_task_confirmed(task_id: int, director: str):
+    """Отправить уведомление сотруднику, что задача подтверждена и архивирована"""
+    try:
+        task = get_task(task_id)
+        if not task:
+            return
+        assignees = [a.strip() for a in (task.get("assignee") or "").split(",") if a.strip()]
+        for assignee_name in assignees:
+            user = get_user_by_name(assignee_name)
+            if user and bot:
+                await bot.send_message(
+                    user["telegram_id"],
+                    f"✅ *Директор {director} подтвердил выполнение задачи #{task_id}*\n\n"
+                    f"📌 {task['title']}",
+                    parse_mode="Markdown"
+                )
+    except Exception as e:
+        logger.error(f"Ошибка уведомления подтверждения: {e}")
 
 routes = web.RouteTableDef()
 
@@ -117,6 +161,11 @@ def task_row(t, project_filter="", status_filter=""):
             f'<a href="#" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#8b5cf6;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
             f"onclick=\"if(confirm('Архивировать задачу #{tid}?')){{fetch('/archive/task/{tid}',{{method:'POST'}}).then(()=>location.reload())}};return false;\">📦 В архив</a>"
         )
+    elif t["status"] == "На проверке":
+        done_btn_menu = (
+            f'<a href="#" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#059669;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
+            f"onclick=\"var n=prompt('Ваше имя (директор):');if(n){{fetch('/confirm-done/{tid}?director='+encodeURIComponent(n),{{method:'POST'}}).then(()=>location.reload())}};return false;\">✅ Подтвердить</a>"
+        )
     else:
         done_btn_menu = (
             f'<a href="#" style="display:flex;align-items:center;gap:10px;padding:9px 16px;color:#059669;text-decoration:none;font-size:13px;" onmouseover="this.style.background=\'#F8FAFC\'" onmouseout="this.style.background=\'\'">'
@@ -133,6 +182,11 @@ def task_row(t, project_filter="", status_filter=""):
                onclick=f"var n=prompt('Ваше имя:');if(n){{window.location='/reopen/{tid}?back={back_url}&author='+encodeURIComponent(n)}};return false;") + '↩️ Переоткрыть</a>'
             + mi('📦 В архив', '#', color='#8b5cf6',
                onclick=f"if(confirm('Архивировать задачу #{tid}?')){{fetch('/archive/task/{tid}',{{method:'POST'}}).then(()=>location.reload())}};return false;") + '📦 В архив</a>'
+        )
+    elif t['status'] == 'На проверке':
+        status_item = (
+            mi('✅ Подтвердить', '#', color='#059669',
+               onclick=f"var n=prompt('Ваше имя (директор):');if(n){{fetch('/confirm-done/{tid}?director='+encodeURIComponent(n),{{method:'POST'}}).then(()=>location.reload())}};return false;") + '✅ Подтвердить</a>'
         )
     else:
         status_item = (
@@ -781,9 +835,26 @@ async def dashboard(request):
 async def mark_done(request):
     task_id = int(request.match_info["task_id"])
     author = request.rel_url.query.get("author", "Дашборд")
-    update_status(task_id, "Выполнена", changed_by=author)
+    # Меняем статус на "На проверке" (отправляем директору на проверку)
+    update_status(task_id, "На проверке", changed_by=author)
+    # Отправляем уведомление о том, что задача отправлена на проверку
+    await notify_task_in_progress(task_id, author)
     back = request.rel_url.query.get("back", "/")
     raise web.HTTPFound(back)
+
+@routes.post("/confirm-done/{task_id}")
+async def confirm_done(request):
+    """Директор подтверждает выполнение и архивирует задачу"""
+    task_id = int(request.match_info["task_id"])
+    director = request.rel_url.query.get("director", "Дашборд")
+    task = get_task(task_id)
+    if not task or task.get("status") != "На проверке":
+        return web.json_response({"error": "Задача уже обработана"}, status=400)
+    # Подтверждаем выполнение и архивируем
+    confirm_task_by_director(task_id, director)
+    # Отправляем уведомление сотруднику
+    await notify_task_confirmed(task_id, director)
+    return web.json_response({"success": True})
 
 @routes.get("/reopen/{task_id}")
 async def reopen_task(request):
