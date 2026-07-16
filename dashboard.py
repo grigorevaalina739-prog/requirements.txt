@@ -1868,7 +1868,8 @@ async def comment_task_page(request):
         time = c.get("created_at", "")[:16]
         del_btn = f'<a class="cmt-del" href="/comment/delete/{c["id"]}?task_id={task_id}&back={back}" onclick="return confirm(\'Удалить этот комментарий?\')" title="Удалить">🗑</a>'
         if c.get("file_id"):
-            comments_html += f'<div class="comment"><div class="cmt-head"><span class="author">📎 {c["author"]}</span><span class="time">{time}</span>{del_btn}</div><div>{c["file_name"]} {c.get("text","")}</div></div>'
+            download_link = f'<a href="/file/{c["file_id"]}?name={c["file_name"]}" style="color:#3B82F6;text-decoration:underline;cursor:pointer;">⬇️ {c["file_name"]}</a>'
+            comments_html += f'<div class="comment"><div class="cmt-head"><span class="author">📎 {c["author"]}</span><span class="time">{time}</span>{del_btn}</div><div>{download_link} {c.get("text","")}</div></div>'
         else:
             comments_html += f'<div class="comment"><div class="cmt-head"><span class="author">💬 {c["author"]}</span><span class="time">{time}</span>{del_btn}</div><div>{c.get("text","")}</div></div>'
     if not comments_html:
