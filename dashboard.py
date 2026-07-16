@@ -695,7 +695,7 @@ async def dashboard(request):
         "  <div class=\"ai-icon\">🤖</div>\n"
         f"  <div class=\"ai-text\"><strong>AI Executive:</strong> {ai_text}</div>\n"
         "  <div class=\"ai-acts\">"
-        "<a href=\"/?status=Просрочена\" class=\"ai-btn\">⚠️ Внимание</a>"
+        "<a href=\"/agent\" class=\"ai-btn\">🤖 Агент</a>"
         "<a href=\"/report\" class=\"ai-btn\">📊 Отчет</a>"
         "</div>\n</div>\n"
     )
