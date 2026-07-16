@@ -2547,7 +2547,7 @@ async def file_archive_page(request):
                     
                     rows.append(f'<div style="padding:8px 0;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">')
                     rows.append(f'<div style="flex:1;">')
-                    rows.append(f'<a href="/file/{file_id}?name={file_name}" style="color:#3B82F6;text-decoration:underline;font-size:13px;font-weight:500;">⬇️ {file_name}</a>')
+                    rows.append(f'<a href="/file/{file_id}?name={file_name.replace(chr(34), "&quot;")}" style="color:#3B82F6;text-decoration:underline;font-size:13px;font-weight:500;">⬇️ {file_name}</a>')
                     if text:
                         rows.append(f'<div style="font-size:12px;color:#64748b;margin-top:3px;">{text[:80]}</div>')
                     rows.append(f'<div style="font-size:11px;color:#94a3b8;margin-top:2px;">👤 {author} • {created_at}</div>')
