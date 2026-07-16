@@ -1234,7 +1234,7 @@ async def confirm_multiple(callback: CallbackQuery, state: FSMContext):
             deadline=final_deadline,
             comment=t.get("description") or "",
         )
-        await notify_assignee(callback.bot, final_assignee, title, project, final_deadline)
+        await notify_assignee(callback.bot, final_assignee, title, project, final_deadline, task_id)
         saved += 1
     await state.clear()
     await callback.message.edit_text(
@@ -1314,7 +1314,7 @@ async def confirm_task(callback: CallbackQuery, state: FSMContext):
         deadline=deadline,
         comment=p.get("description") or "",
     )
-    await notify_assignee(callback.bot, assignee, title, project, deadline)
+    await notify_assignee(callback.bot, assignee, title, project, deadline, task_id)
     await state.clear()
     await callback.message.edit_text(
         f"✅ Задача #{task_id} добавлена в *{project}*!",
@@ -1788,7 +1788,7 @@ async def choose_manager(callback: CallbackQuery, state: FSMContext):
         deadline=parsed.get("deadline") or "",
         comment=parsed.get("description") or "",
     )
-    await notify_assignee(callback.bot, assignee, parsed.get("title") or "", project, parsed.get("deadline") or "")
+    await notify_assignee(callback.bot, assignee, parsed.get("title") or "", project, parsed.get("deadline") or "", task_id)
     await state.clear()
     await callback.message.edit_text(
         f"✅ *Задача #{task_id} создана!*\n\n"
