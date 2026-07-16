@@ -670,6 +670,12 @@ async def add_comment_start(callback: CallbackQuery, state: FSMContext):
 async def save_comment(message: Message, state: FSMContext):
     data = await state.get_data()
     task_id = data.get("commenting_task_id")
+    
+    # Если сообщение пустое — просим повторить
+    if not message.text or not message.text.strip():
+        await message.answer("❌ Напишите комментарий (не пустое сообщение)")
+        return
+    
     with get_conn() as conn:
         user = conn.execute(
             "SELECT * FROM users WHERE telegram_id=?",
@@ -677,6 +683,8 @@ async def save_comment(message: Message, state: FSMContext):
         ).fetchone()
     author = user["name"] if user else message.from_user.first_name or "Неизвестно"
     add_task_comment(task_id=task_id, author=author, text=message.text.strip())
+    
+    # Очищаем состояние и закрываем режим
     await state.clear()
     await message.answer(f"✅ Комментарий к задаче #{task_id} сохранён!")
 
@@ -719,6 +727,12 @@ async def save_file(message: Message, state: FSMContext):
         await message.answer("❌ Задача не выбрана. Используйте /attach для прикрепления файла.")
         await state.clear()
         return
+    
+    # Если это пустое текстовое сообщение без файла — ничего не делаем
+    if not message.document and not message.photo and not message.video:
+        await message.answer("❌ Поддерживаются файлы, фото и видео.")
+        return
+    
     with get_conn() as conn:
         user = conn.execute(
             "SELECT * FROM users WHERE telegram_id=?",
@@ -729,6 +743,7 @@ async def save_file(message: Message, state: FSMContext):
     file_name = ""
     file_type = ""
     caption = message.caption or ""
+    
     if message.document:
         file_id = message.document.file_id
         file_name = message.document.file_name or "файл"
@@ -741,11 +756,13 @@ async def save_file(message: Message, state: FSMContext):
         file_id = message.video.file_id
         file_name = message.video.file_name or "видео"
         file_type = "video"
-    else:
-        await message.answer("❌ Поддерживаются файлы, фото и видео.")
-        return
+    
+    # Сохраняем файл
     add_task_comment(task_id=task_id, author=author, text=caption, file_id=file_id, file_name=file_name, file_type=file_type)
+    
+    # Очищаем состояние и закрываем режим
     await state.clear()
+    
     from config import RAILWAY_PUBLIC_DOMAIN
     dash_url = f"https://{RAILWAY_PUBLIC_DOMAIN}/attach/{task_id}" if RAILWAY_PUBLIC_DOMAIN else ""
     link = f"\n[Посмотреть в дашборде]({dash_url})" if dash_url else ""
