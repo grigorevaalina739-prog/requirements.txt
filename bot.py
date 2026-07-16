@@ -7,7 +7,7 @@ from aiohttp import web
 from config import BOT_TOKEN
 from handlers import router
 from scheduler import check_overdue_tasks, check_deadline_reminders, auto_mark_overdue, weekly_digest, morning_briefing, check_meeting_reminders
-from database import init_db
+from database import init_db, delete_empty_projects
 from dashboard import create_app
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 async def main():
     # Инициализация БД
     init_db()
+    
+    # Удалить пустые проекты если они есть
+    delete_empty_projects()
+    logger.info("Очистка пустых проектов выполнена")
 
     # Telegram бот
     bot = Bot(token=BOT_TOKEN)
