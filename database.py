@@ -482,11 +482,27 @@ def get_projects():
 
 def add_project(name):
     try:
+        # Не добавляем пустые проекты
+        if not name or not name.strip():
+            logger.warning("Попытка добавить пустой проект, пропускаю")
+            return False
         with get_conn() as conn:
-            conn.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (name,))
+            conn.execute("INSERT OR IGNORE INTO projects (name) VALUES (?)", (name.strip(),))
         return True
     except Exception as e:
         logger.error(f"Ошибка добавления проекта: {e}")
+
+
+def delete_empty_projects():
+    """Удалить пустые проекты из БД"""
+    try:
+        with get_conn() as conn:
+            # Удаляем проекты с пустым или None именем
+            conn.execute("DELETE FROM projects WHERE name IS NULL OR name = ''")
+            return True
+    except Exception as e:
+        logger.error(f"Ошибка удаления пустых проектов: {e}")
+        return False
         return False
 
 # Эти функции вызываются из init_db() при старте приложения
