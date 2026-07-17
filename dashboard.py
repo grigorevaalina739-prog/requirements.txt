@@ -1612,9 +1612,8 @@ async def agent_parse_v2(request):
     if not text:
         return web.json_response({"error": "Пустой текст"})
     try:
-        from agent import parse_task_with_ai
-        today = datetime.now().strftime("%Y-%m-%d")
-        result = await parse_task_with_ai(text, today)
+        # AI агент временно отключен
+        result = None
         if not result:
             return web.json_response({"error": "Не удалось распознать задачу"})
         # ML предсказание проекта если AI не определил
