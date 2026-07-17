@@ -1,6 +1,7 @@
 aiogram==3.1.1
-aiohttp>=3.8.0
-aiofiles>=23.0.0
-python-dotenv>=1.0.0
-APScheduler>=3.10.0
-pytz>=2023.0
+aiohttp
+aiofiles
+python-dotenv
+APScheduler
+pytz
+
