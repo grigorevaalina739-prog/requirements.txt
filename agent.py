@@ -3,14 +3,21 @@
 Понимает контекст, парсит задачи, предлагает проекты и сотрудников.
 """
 
-import anthropic
 import json
 import logging
 from database import get_managers, get_projects
 
 logger = logging.getLogger(__name__)
 
-client = anthropic.Anthropic()
+# Пытаемся импортировать anthropic, если не установлен - используем fallback
+try:
+    import anthropic
+    client = anthropic.Anthropic()
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    logger.warning("anthropic не установлен - используется режим fallback")
+    ANTHROPIC_AVAILABLE = False
+    client = None
 
 SYSTEM_PROMPT = """Ты — умный AI ассистент для системы управления задачами MINISO.
 
@@ -65,6 +72,10 @@ async def parse_task_with_ai(user_text: str, today_date: str = None) -> dict:
     Returns:
         dict: Задача для создания или None
     """
+    
+    if not ANTHROPIC_AVAILABLE or not client:
+        logger.warning("Claude API недоступен - возвращаю None")
+        return None
     
     managers = get_managers()
     projects = [p["name"] for p in get_projects()]
